@@ -1,0 +1,44 @@
+# DEV/QA permissions (includes EMIDS group)
+permissions_dev_qa: &permissions_dev_qa
+  - group_name: 'DataBricks_POP-${var.ENV_CAP}_DataEngineer'
+    level: CAN_MANAGE
+  - user_name: '${var.eti_service_principal}'
+    level: CAN_MANAGE
+  - group_name: 'DataBricks_POP-${var.ENV_CAP}_DataEngineer_EMIDS'
+    level: CAN_MANAGE
+  - group_name: 'DataBricks_POP-${var.ENV_CAP}_DataOps'
+    level: CAN_MANAGE_RUN
+
+# STG/PROD permissions (restricted - no EMIDS group)
+permissions_stg_prod: &permissions_stg_prod
+  - group_name: 'DataBricks_POP-${var.ENV_CAP}_DataEngineer'
+    level: CAN_MANAGE
+  - user_name: '${var.eti_service_principal}'
+    level: CAN_MANAGE
+  - group_name: 'DataBricks_POP-${var.ENV_CAP}_DataOps'
+    level: CAN_MANAGE_RUN
+
+targets:
+  DEV:
+    resources:
+      jobs:
+        gp_suspecting_wf:
+          permissions: *permissions_dev_qa
+
+  QA:
+    resources:
+      jobs:
+        gp_suspecting_wf:
+          permissions: *permissions_dev_qa
+
+  STG:
+    resources:
+      jobs:
+        gp_suspecting_wf:
+          permissions: *permissions_stg_prod
+
+  PROD:
+    resources:
+      jobs:
+        gp_suspecting_wf:
+          permissions: *permissions_stg_prod
