@@ -1,0 +1,275 @@
+DIAGNOSISCODE,DESCRIPTION,OM8_HCC_ERRD_MODEL_CATEGORY_V21,OM8_HCC_ERRD_MODEL_CATEGORY_V24,OM8_HCC_MODEL_CATEGORY_V22,OM8_HCC_MODEL_CATEGORY_V24,OM8_HCC_MODEL_CATEGORY_V28,RARCC_MODEL_CATEGORY_V05,RARCC_MODEL_CATEGORY_V03,OM8_HCC_ERRD_MODEL_CATEGORY_V21_FOR_2025_PAYMENT_YEAR,OM8_HCC_ERRD_MODEL_CATEGORY_V24_FOR_2025_PAYMENT_YEAR,OM8_HCC_MODEL_CATEGORY_V22_FOR_2025_PAYMENT_YEAR,OM8_HCC_MODEL_CATEGORY_V24_FOR_2025_PAYMENT_YEAR,OM8_HCC_MODEL_CATEGORY_V28_FOR_2025_PAYMENT_YEAR,RARCC_MODEL_CATEGORY_V05_FOR_2025_PAYMENT_YEAR,RARCC_MODEL_CATEGORY_V03_FOR_2025_PAYMENT_YEAR
+A01.0,Typhoid fever,1,1,1,1,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A01.1,Paratyphoid fever A,1,1,1,1,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A01.2,Paratyphoid fever B,1,1,1,1,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A01.3,Paratyphoid fever C,1,1,1,1,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A01.4,Paratyphoid fever (unspecified),1,1,1,1,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A02.0,Salmonella gastroenteritis,19,19,19,19,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A02.1,Salmonella sepsis,19,19,19,19,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A02.2,Localized Salmonella infection,19,19,19,19,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A02.8,Other specified salmonella infection,19,19,19,19,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A02.9,Salmonella infection (unspecified),19,19,19,19,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A03.0,Shigellosis due to Shigella dysenteriae,1,1,1,1,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A03.1,Shigellosis due to Shigella flexneri,1,1,1,1,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A03.2,Shigellosis due to Shigella boydii,1,1,1,1,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A03.3,Shigellosis due to Shigella sonnei,1,1,1,1,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A03.8,Other Shigellosis,1,1,1,1,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A03.9,Shigellosis (unspecified),1,1,1,1,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A04.0,Enteroinvasive Escherichia coli infection,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A04.1,Enterotoxigenic Escherichia coli infection,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A04.2,Enteropathogenic Escherichia coli infection,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A04.3,Enteroaggregative Escherichia coli infection,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A04.4,Other intestinal Escherichia coli infections,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A04.5,Campylobacter enteritis,3,3,3,3,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A04.6,Enteritis due to Yersinia enterocolitica,3,3,3,3,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A04.7,Enteritis due to Clostridium difficile,3,3,3,3,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A04.8,Other specified bacterial intestinal infections,3,3,3,3,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A04.9,Bacterial intestinal infection (unspecified),3,3,3,3,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A05.0,Foodborne staphylococcal intoxication,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A05.1,Botulism,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A05.2,Foodborne Clostridium perfringens [Clostridium welchii] intoxication,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A05.3,Foodborne Vibrio cholerae non-O1 intoxication,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A05.4,Foodborne Bacillus cereus intoxication,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A05.5,Foodborne Vibrio parahaemolyticus intoxication,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A05.8,Other specified bacterial foodborne intoxications,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A05.9,Bacterial foodborne intoxication (unspecified),2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A06.0,Acute amebic dysentery,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A06.1,Chronic intestinal amebiasis,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A06.2,Amebic nondysenteric colitis,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A06.3,Ameboma of intestine,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A06.4,Amebic liver abscess,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A06.5,Amebic infection of other sites,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A06.8,Amebic infection (other),2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A06.9,Amebiasis (unspecified),2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A07.0,Balantidiasis,3,3,3,3,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A07.1,Giardiasis [Lambliasis],3,3,3,3,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A07.2,Cryptosporidiosis,3,3,3,3,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A07.3,Isosporiasis,3,3,3,3,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A07.4,Cyclosporiasis,3,3,3,3,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A07.8,Other protozoal intestinal diseases,3,3,3,3,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A07.9,Protozoal intestinal disease (unspecified),3,3,3,3,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A08.0,Rotaviral enteritis,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A08.1,Acute gastroenteritis due to Norwalk agent,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A08.11,Acute gastroenteritis due to Norwalk agent,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A08.19,Acute gastroenteritis due to other small round virus NEC,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A08.2,Adenoviral enteritis,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A08.3,Other viral enteritis,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A08.39,Other viral enteritis,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A08.4,Viral intestinal infection (unspecified),2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A09,Other gastroenteritis and colitis of infectious and unspecified origin,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A15.0,Tuberculosis of lung,77,88,89,100,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A15.9,Respiratory tuberculosis (unspecified),77,88,89,100,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A17.0,Tuberculous meningitis,77,88,89,100,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A18.2,Tuberculosis of lymph nodes,77,88,89,100,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A19.0,Acute miliary tuberculosis,77,88,89,100,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A19.9,Miliary tuberculosis (unspecified),77,88,89,100,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A31.0,Pulmonary Mycobacterium marinum infection,77,88,89,100,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A31.1,Cutaneous Mycobacterium marinum infection,77,88,89,100,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A31.8,Other Mycobacterium avium complex infections,77,88,89,100,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A31.9,Mycobacterial infection (unspecified),77,88,89,100,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A33.0,Newborn (suspected) infected with Treponema pallidum,1,1,1,1,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A39.0,Meningococcemia,4,4,5,5,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A39.9,Meningococcal infection (unspecified),4,4,5,5,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A40.0,Sepsis due to Streptococcus pyogenes,8,10,12,13,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A40.3,Sepsis due to Streptococcus pneumoniae,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A41.0,Sepsis due to Staphylococcus aureus,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A41.01,Sepsis due to Methicillin susceptible Staphylococcus aureus,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A41.02,Sepsis due to Methicillin resistant Staphylococcus aureus,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A41.1,Sepsis due to other specified staphylococcus,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A41.2,Sepsis due to unspecified staphylococcus,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A41.3,Sepsis due to Heemophilus influenzae,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A41.4,Sepsis due to anaerobes,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A41.5,"Sepsis due to other Gram-negative organisms, unspecified",2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A41.51,Sepsis due to Pseudomonas,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A41.52,Sepsis due to Serratia,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A41.53,Sepsis due to Acinetobacter,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A41.59,Sepsis due to other Gram-negative organisms,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A41.81,Sepsis due to Enterococcus,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A41.89,Other specified sepsis,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A41.9,Sepsis (unspecified organism),2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A42.0,Pulmonary actinomycosis,115,115,115,115,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A42.7,Actinomycosis of other sites,115,115,115,115,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A42.9,Actinomycosis (unspecified),115,115,115,115,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A47.0,Nocardiosis of lung,115,115,115,115,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A47.9,Nocardiosis (unspecified),115,115,115,115,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A48.1,Legionnaires' disease,7,9,12,18,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A48.8,Other specified bacterial diseases,115,115,115,115,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A49.0,Staphylococcal infection (site unspecified),2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A49.02,Staphylococcal infection (site unspecified) - MSSA,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A49.1,Streptococcal infection (site unspecified),2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A49.9,Bacterial infection (site and organism unspecified),2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A50.0,Early congenital syphilis symptomatic,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A50.1,Early congenital syphilis latent,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A50.2,Early congenital syphilis unspecified,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A50.3,Late congenital syphilis (symptomatic),2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A50.4,Late congenital syphilis latent,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A50.5,Late congenital syphilis (unspecified),2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A50.9,Congenital syphilis (unspecified),2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A51.0,Primary genital syphilis,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A51.1,Primary anal syphilis,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A51.2,Primary syphilis of other sites,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A51.3,Secondary syphilis of skin and mucous membranes,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A51.39,Other secondary syphilis of skin and mucous membranes,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A51.4,Other secondary syphilis,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A51.5,Early syphilis (unspecified),2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A51.9,Early syphilis (unspecified),2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A52.0,Cardiovascular syphilis,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A52.1,Neurosyphilis (unspecified),2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A52.2,Asymptomatic neurosyphilis,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A52.3,Neurosyphilis (unspecified),2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A52.7,Other symptomatic late syphilis,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A52.8,Late syphilis (latent),2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A52.9,Late syphilis (unspecified),2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A53.0,Latent syphilis (unspecified as early or late),2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A53.9,Syphilis (unspecified),2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A54.0,Gonococcal infection of lower genital tract without periurethral or accessory gland abscess,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A54.01,Gonococcal infection of lower genital tract with abscess of Bartholin's gland,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A54.02,Gonococcal cervicitis,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A54.03,Gonococcal urethritis,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A54.09,Other gonococcal infection of lower genital tract,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A54.1,Gonococcal infection of lower genital tract with periurethral and accessory gland abscess,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A54.3,Gonococcal infection of eye,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A54.8,Other gonococcal infections,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A54.9,Gonococcal infection (unspecified),2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A55.0,Chlamydial infection of lower genital tract,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A56.00,Chlamydial infection of urethra,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A56.01,Chlamydial infection of Bartholin's gland,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A56.09,Other chlamydial infection of lower genital tract,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A56.1,Chlamydial cervicitis and urethritis,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A56.2,Chlamydial infection of pelvis and other genitourinary organs,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A56.3,Chlamydial infection of eye,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A56.4,Chlamydial infection of pharynx,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A56.8,Sexually transmitted chlamydial infection of other sites,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A56.9,Chlamydial infection (site unspecified),2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A57.0,Chancroid,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A58.0,Granuloma inguinale,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A59.0,Urogenital trichomoniasis,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A59.8,Trichomoniasis of other sites,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A59.9,Trichomoniasis (unspecified),2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A60.0,Herpesviral infection of genitals and urogenital tract,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A60.01,Herpesviral infection of penis,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A60.02,Herpesviral infection of other male genital organs,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A60.09,Herpesviral infection of other urogenital tract,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A60.1,Herpesviral infection of perianal skin and rectum,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A63.0,Anogenital (venereal) warts,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A64.0,Unspecified sexually transmitted disease,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A65.0,Nonvenereal endemic syphilis,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A66.0,Initial lesion of yaws,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A66.1,Multiple papillomata and wet crab yaws,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A66.2,Other early manifestations of yaws,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A66.3,Hyperkeratosis of yaws,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A66.4,Gummata and ulceration of yaws,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A66.5,Gangosa,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A66.6,Bone and joint lesions of yaws,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A66.7,Other manifestations of yaws,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A66.8,Latent yaws,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A66.9,Yaws (unspecified),2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A67.0,Primary lesion of pinta [carate],2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A67.1,Intermediate lesions of pinta [carate],2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A67.2,Late lesions of pinta [carate],2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A67.3,Mixed lesions of pinta [carate],2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A67.9,Pinta [carate] (unspecified),2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A69.0,Treponematosis (unspecified),2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A69.20,Lyme disease (unspecified manifestation),2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A69.21,Lyme arthritis,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A69.22,Other manifestations of Lyme disease,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A69.8,Other specified spirochetal infections,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A69.9,Spirochetal infection (unspecified),2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A70.0,Chlamydial conjunctivitis,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A71.0,Initial stage of trachoma,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A71.1,Active stage of trachoma,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A71.9,Trachoma (unspecified),2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A74.0,Chlamydial conjunctivitis,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A75.0,Epidemic louse-borne typhus fever [epidemic typhus],2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A75.1,Recurrent fever (Borrelia recurrentis),2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A75.2,Tick-borne recurrent fever (Spirillum minus),2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A75.3,Endemic flea-borne typhus,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A75.9,Typhus fever (unspecified),2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A77.0,Spotted fever due to Rickettsia rickettsii,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A77.1,Spotted fever due to Rickettsia conorii,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A77.2,Spotted fever due to Rickettsia siberica,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A77.3,Spotted fever due to Rickettsia australis,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A77.4,Ehrlichiosis,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A77.40,Ehrlichiosis (unspecified),2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A77.41,Ehrlichiosis chaffeensis [human monocytic ehrlichiosis],2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A77.49,Other ehrlichiosis,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A77.8,Other spotted fevers,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A77.9,Spotted fever (unspecified),2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A78.0,Q fever,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A79.0,Trench fever,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A79.81,Babesiosis,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A79.89,Other specified rickettsial infections,2,2,2,2,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A80.0,Poliomyelitis due to wild-type poliovirus,77,88,89,100,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A80.1,Poliomyelitis due to vaccine-derived poliovirus,77,88,89,100,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A80.2,Poliomyelitis (unspecified),77,88,89,100,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A80.30,Poliomyelitis (unspecified type),77,88,89,100,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A80.39,Other poliomyelitis,77,88,89,100,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A81.00,Creutzfeldt-Jakob disease (sporadic),52,52,52,102,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A81.01,Variant Creutzfeldt-Jakob disease,52,52,52,102,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A81.09,Other Creutzfeldt-Jakob disease,52,52,52,102,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A81.1,Subacute sclerosing panencephalitis,52,52,52,102,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A81.2,Progressive multifocal leukoencephalopathy,52,52,52,102,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A81.81,Kuru,52,52,52,102,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A81.82,Fatal familial insomnia [FFI],52,52,52,102,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A81.83,Familial Creutzfeldt-Jakob disease,52,52,52,102,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A81.89,Other atypical virus infections of central nervous system,52,52,52,102,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A81.9,Atypical virus infection (unspecified),52,52,52,102,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A82.0,Sylvatic rabies,7,9,12,18,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A82.1,Urban rabies,7,9,12,18,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A82.9,Rabies (unspecified),7,9,12,18,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A83.0,Japanese encephalitis,7,9,12,18,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A83.1,Western equine encephalitis,7,9,12,18,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A83.2,Eastern equine encephalitis,7,9,12,18,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A83.3,St. Louis encephalitis,7,9,12,18,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A83.4,Australian encephalitis,7,9,12,18,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A83.5,California encephalitis,7,9,12,18,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A83.6,Rocio virus encephalitis,7,9,12,18,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A83.8,Other specified mosquito-borne viral encephalitis,7,9,12,18,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A83.9,Mosquito-borne viral encephalitis (unspecified),7,9,12,18,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A84.0,Tick-borne encephalitis (Russian spring-summer encephalitis),7,9,12,18,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A84.1,Louping ill,7,9,12,18,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A84.8,Other tick-borne viral encephalitis,7,9,12,18,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A84.9,Tick-borne viral encephalitis (unspecified),7,9,12,18,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A85.0,Enteroviral encephalitis,7,9,12,18,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A85.1,Adenoviral encephalitis,7,9,12,18,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A85.2,Arthropod-borne viral encephalitis (unspecified),7,9,12,18,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A85.8,Other specified viral encephalitis,7,9,12,18,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A86.0,Viral encephalitis (unspecified),7,9,12,18,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A87.0,Enteroviral meningitis,7,9,12,18,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A87.1,Adenoviral meningitis,7,9,12,18,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A87.2,Lymphocytic choriomeningitis,7,9,12,18,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A87.8,Other viral meningitis,7,9,12,18,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A87.9,Viral meningitis (unspecified),7,9,12,18,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A88.0,Enteroviral exanthematous fever [Boston exanthem],6,6,6,6,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A88.1,Epidemic vertigo,6,6,6,6,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A88.8,Other specified viral infections of central nervous system,6,6,6,6,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A89.0,Unspecified viral infection of central nervous system,6,6,6,6,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A90.0,Dengue fever,6,6,6,6,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A91.0,Dengue hemorrhagic fever,6,6,6,6,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A92.0,O'nyong'nyong fever,6,6,6,6,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A92.1,Ross River disease,6,6,6,6,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A92.2,Chikungunya virus disease,6,6,6,6,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A92.3,Sindbis virus disease,6,6,6,6,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A92.8,Other specified arthropod-borne viral fevers,6,6,6,6,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A92.9,Arthropod-borne viral fever (unspecified),6,6,6,6,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A93.0,Oropouche virus disease,6,6,6,6,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A93.1,Sandfly fever,6,6,6,6,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A93.2,Colorado tick fever,6,6,6,6,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A93.8,Other specified arthropod-borne viral diseases,6,6,6,6,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A94.0,Unspecified arthropod-borne viral disease,6,6,6,6,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A95.0,Sylvatic yellow fever,6,6,6,6,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A95.1,Urban yellow fever,6,6,6,6,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A95.9,Yellow fever (unspecified),6,6,6,6,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A96.0,Junín virus disease,6,6,6,6,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A96.1,Machupo virus disease,6,6,6,6,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A96.2,Lassa fever,6,6,6,6,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A96.8,Other arenaviral fevers,6,6,6,6,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A96.9,Arenaviral fever (unspecified),6,6,6,6,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A98.0,Marburg virus disease,6,6,6,6,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A98.1,Ebola virus disease,6,6,6,6,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A98.2,Sudan virus disease,6,6,6,6,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A98.3,Taï Forest virus disease,6,6,6,6,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A98.4,Bundibugyo virus disease,6,6,6,6,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A98.5,Reston virus disease,6,6,6,6,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A98.8,Other filoviral fevers,6,6,6,6,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
+A99.0,Unspecified arthropod-borne viral fever,6,6,6,6,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes
