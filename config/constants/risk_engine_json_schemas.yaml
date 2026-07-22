@@ -1,0 +1,313 @@
+# Risk Engine JSON Schemas Configuration
+# JSON Schema Definitions for Risk Member HCC Processing
+# These schemas are used to parse JSON strings in the risk adjustment pipeline
+
+# ================================
+# Overview
+# ================================
+# This configuration defines the JSON schemas used throughout the risk adjustment pipeline.
+# The schemas support the following processing steps:
+# - Step 1: Extract diagnosis codes and their HCC category mappings
+# - Step 2: Extract HCC coefficients and their associated scores
+# - Step 3: Validate member risk data structure and completeness
+
+# ================================
+# Diagnosis to HCC Mapping Schema
+# ================================
+# Schema for DIAG_CD_TO_HCC_JSON_LIST parsing (Step 1)
+# Used to extract diagnosis codes and their HCC category mappings
+# across multiple HCC model versions (CMS HCC, RxHCC, ESRD)
+
+schemas:
+  diag_json_schema:
+    description: "Schema for extracting diagnosis codes and HCC category mappings"
+    step: 1
+    purpose: "Parse diagnosis code to HCC category mappings"
+    usage: "Extract diagnosis codes and map to HCC categories across model versions"
+    type: "struct"
+    fields:
+      - name: DIAG_CD
+        type: "string"
+        nullable: true
+        description: "Diagnosis code (ICD-10-CM)"
+        example: "E11.9"
+
+      # CMS HCC Model Categories
+      - name: CMS-HCC-MODEL-CATEGORY-V24
+        type: "integer"
+        nullable: true
+        description: "CMS HCC Model Category for Version 24"
+        model: "cms_hcc"
+        version: "v24"
+        example: 19
+        range: "0-255"
+
+      - name: CMS-HCC-MODEL-CATEGORY-V28
+        type: "integer"
+        nullable: true
+        description: "CMS HCC Model Category for Version 28"
+        model: "cms_hcc"
+        version: "v28"
+        example: 19
+        range: "0-255"
+
+      # RxHCC Model Categories
+      - name: RXHCC-MODEL-CATEGORY-V03
+        type: "integer"
+        nullable: true
+        description: "RxHCC Model Category for Version 03"
+        model: "rxhcc"
+        version: "v03"
+        example: 15
+        range: "0-255"
+
+      - name: RXHCC-MODEL-CATEGORY-V05
+        type: "integer"
+        nullable: true
+        description: "RxHCC Model Category for Version 05"
+        model: "rxhcc"
+        version: "v05"
+        example: 15
+        range: "0-255"
+
+      # ESRD HCC Model Categories
+      - name: CMS-HCC-ESRD-MODEL-CATEGORY-V21
+        type: "integer"
+        nullable: true
+        description: "CMS HCC ESRD Model Category for Version 21"
+        model: "cms_hcc_esrd"
+        version: "v21"
+        example: 83
+        range: "0-255"
+
+      - name: CMS-HCC-ESRD-MODEL-CATEGORY-V24
+        type: "integer"
+        nullable: true
+        description: "CMS HCC ESRD Model Category for Version 24"
+        model: "cms_hcc_esrd"
+        version: "v24"
+        example: 83
+        range: "0-255"
+
+  # ================================
+  # HCC Score Schema
+  # ================================
+  # Schema for HCC_TO_SCORE_JSON_LIST parsing (Step 2)
+  # Used to extract HCC coefficients and their associated scores
+
+  hcc_score_schema:
+    description: "Schema for extracting HCC coefficients and their associated scores"
+    step: 2
+    purpose: "Parse HCC coefficients and calculate scores"
+    usage: "Extract HCC coefficients and map to their corresponding risk scores"
+    type: "struct"
+    fields:
+      - name: HCC_COEFF
+        type: "string"
+        nullable: true
+        description: "HCC Coefficient identifier"
+        format: "HCC_[0-9]+ or other risk factor codes"
+        examples:
+          - "HCC_1"
+          - "HCC_19"
+          - "HCC_127"
+          - "OREC_1"
+          - "OREC_2"
+
+      - name: HCC_SCORE
+        type: "double"
+        nullable: true
+        description: "Risk score value for the HCC coefficient"
+        format: "Decimal number with up to 4 decimal places"
+        examples:
+          - 0.123
+          - 1.456
+          - 0.050
+          - 2.789
+        notes: "Score represents the relative risk contribution of the HCC"
+
+# ================================
+# Model Versions Reference
+# ================================
+# Reference information for HCC model versions used in the pipeline
+
+model_versions:
+  cms_hcc:
+    name: "CMS HCC Risk Adjustment Model"
+    category: "Hierarchical Condition Categories"
+    versions:
+      v24:
+        release_year: 2024
+        description: "CMS HCC Model Version 24"
+        applicable_to: ["Aged", "Disabled", "End-Stage Renal Disease"]
+
+      v28:
+        release_year: 2024
+        description: "CMS HCC Model Version 28"
+        applicable_to: ["Aged", "Disabled", "End-Stage Renal Disease"]
+
+  rxhcc:
+    name: "RxHCC Pharmacy Risk Adjustment Model"
+    category: "Pharmacy-based Hierarchical Condition Categories"
+    versions:
+      v03:
+        release_year: 2020
+        description: "RxHCC Model Version 03"
+        applicable_to: ["Pharmacy beneficiaries"]
+
+      v05:
+        release_year: 2022
+        description: "RxHCC Model Version 05"
+        applicable_to: ["Pharmacy beneficiaries"]
+
+  cms_hcc_esrd:
+    name: "CMS ESRD HCC Risk Adjustment Model"
+    category: "End-Stage Renal Disease Hierarchical Condition Categories"
+    versions:
+      v21:
+        release_year: 2021
+        description: "ESRD HCC Model Version 21"
+        applicable_to: ["ESRD patients"]
+
+      v24:
+        release_year: 2024
+        description: "ESRD HCC Model Version 24"
+        applicable_to: ["ESRD patients"]
+
+# ================================
+# Processing Pipeline Steps
+# ================================
+# Description of how these schemas are used in the pipeline
+
+pipeline_steps:
+  step_1_diagnosis_mapping:
+    name: "Diagnosis Code to HCC Mapping"
+    schema: "diag_json_schema"
+    input: "Raw diagnosis codes from claims"
+    output: "Mapped HCC categories across model versions"
+    operations:
+      - "Parse diagnosis JSON strings"
+      - "Extract diagnosis codes (DIAG_CD)"
+      - "Extract HCC category mappings for all model versions"
+      - "Handle missing or null categories"
+    error_handling:
+      - "Invalid JSON format"
+      - "Missing required fields"
+      - "Unexpected data types"
+
+  step_2_hcc_scoring:
+    name: "HCC Coefficient to Score Mapping"
+    schema: "hcc_score_schema"
+    input: "HCC coefficients from mapping tables"
+    output: "Calculated risk scores"
+    operations:
+      - "Parse HCC score JSON strings"
+      - "Extract HCC coefficient identifiers"
+      - "Extract score values (typically 0.0 to 3.0 range)"
+      - "Aggregate scores by beneficiary"
+    error_handling:
+      - "Invalid JSON format"
+      - "Missing score coefficients"
+      - "Out-of-range score values"
+
+  step_3_validation:
+    name: "Member Risk Data Validation"
+    input: "Processed HCC data from steps 1-2"
+    operations:
+      - "Validate schema compliance"
+      - "Check data completeness"
+      - "Verify score calculations"
+      - "Flag anomalies or outliers"
+    quality_checks:
+      - "All required fields present"
+      - "Data types match schema"
+      - "Scores within expected range"
+      - "No duplicate HCC assignments"
+
+# ================================
+# HCC Categories Reference
+# ================================
+# Examples of HCC categories used in the models
+
+hcc_categories:
+  examples:
+    - hcc_id: 1
+      description: "HIV/AIDS"
+      relative_risk: "High"
+
+    - hcc_id: 19
+      description: "Diabetes with complications"
+      relative_risk: "Medium-High"
+
+    - hcc_id: 83
+      description: "Renal failure (ESRD)"
+      relative_risk: "Very High"
+
+  notes: "HCC IDs range from 1-255 depending on model version"
+
+# ================================
+# Data Validation Rules
+# ================================
+# Validation rules for schema compliance
+
+validation_rules:
+  diag_json_schema:
+    required_fields:
+      - DIAG_CD
+    conditional_fields:
+      - "At least one HCC category should be present for valid diagnoses"
+    data_type_checks:
+      - "DIAG_CD must be string"
+      - "All HCC category fields must be integer or null"
+    value_ranges:
+      - "HCC categories must be 0-255 or null"
+
+  hcc_score_schema:
+    required_fields:
+      - HCC_COEFF
+      - HCC_SCORE
+    data_type_checks:
+      - "HCC_COEFF must be string"
+      - "HCC_SCORE must be double"
+    value_ranges:
+      - "HCC_SCORE typically ranges from 0.0 to 3.0"
+    precision:
+      - "HCC_SCORE should maintain up to 4 decimal places"
+
+# ================================
+# Example Usage
+# ================================
+# Examples of how these schemas are used in practice
+
+examples:
+  diagnosis_mapping:
+    input_json: |
+      {
+        "DIAG_CD": "E11.9",
+        "CMS-HCC-MODEL-CATEGORY-V24": 19,
+        "CMS-HCC-MODEL-CATEGORY-V28": 19,
+        "RXHCC-MODEL-CATEGORY-V03": null,
+        "RXHCC-MODEL-CATEGORY-V05": null,
+        "CMS-HCC-ESRD-MODEL-CATEGORY-V21": null,
+        "CMS-HCC-ESRD-MODEL-CATEGORY-V24": null
+      }
+    description: "Diagnosis E11.9 (Type 2 Diabetes) maps to HCC_19 in both CMS HCC models"
+
+  hcc_scoring:
+    input_json: |
+      {
+        "HCC_COEFF": "HCC_19",
+        "HCC_SCORE": 0.456
+      }
+    description: "HCC_19 has a risk score coefficient of 0.456"
+
+# ================================
+# Related Configuration Files
+# ================================
+# References to other configuration files used in conjunction with these schemas
+
+related_configs:
+  - "expected_schema.yaml"
+  - "data_loader_config.yaml"
+  - "ma_ra_model_constant.yaml"
+  - "param_values.yaml"
