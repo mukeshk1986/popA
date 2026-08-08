@@ -1,2 +1,0 @@
-# popA
-population advisor 

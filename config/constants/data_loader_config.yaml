@@ -1,0 +1,301 @@
+# Data Loader Configuration
+# This configuration file defines the schema, file locations, and column mappings
+# for the CMS Population Health data pipeline
+
+catalog: pop_{env}
+source_schema: "{plan_name}ingestion"
+target_schema: "{plan_name}transformation"
+
+# ================================
+# Base Directory Configuration
+# ================================
+# Base for all files lookups
+src_file_dir: /Volumes/pop_{env}/volumes/bhi-pop-{env}-datalake-{plan_name}inbox-us-east-1
+
+# Base for all files lookups
+ingestion_file_dir: /Volumes/pop_{env}/{plan_name}ingestion/ingestion/src_files
+
+# Base for archiving files
+archive_dir: /Volumes/pop_{env}/{plan_name}ingestion/ingestion/archive
+
+# ================================
+# File Names Configuration
+# ================================
+# All the valid filenames to be processed
+file_names:
+  - facility_detail
+  - facility_diag
+  - facility_header
+  - member
+  - member_enrollee_history
+  - member_enrollment
+  - pharmacy
+  - professional
+  - professional_diag
+  - diagnosis_diag
+  - quality_events
+  - lab
+  - designated_provider
+  - provider
+  - location
+  - health_events
+  - mmr
+  - mao_004
+
+# Supplemental file list
+supplemental_file_names:
+  - mao_004
+  - mmr
+
+# ================================
+# Merge Keys Configuration
+# ================================
+# Merge keys for the non-supplemental tables in ra_transformation
+merge_keys:
+  facility_detail: "HCME_PLAN_ID_CD,HCME_ID_CD"
+  facility_diag: "HCME_PLAN_ID_CD,HCME_ID_CD,DIAG_TYPE_CD,DIAG_NUMB"
+  facility_header: "CLIM_ID_CD,HCME_PLAN_ID_CD"
+  member_enrollee_history: "HCME_PLAN_ID_CD,MEMB_ID_CD,BHI_MEMB_ID"
+  member: "HCME_PLAN_ID_CD"
+  professional: "CLIM_ID_CD,CLIM_LN_NUMB,HCME_PLAN_ID_CD"
+  professional_diag: "CLIM_ID_CD,HCME_PLAN_ID_CD,DIAG_TYPE_CD,DIAG_NUMB"
+  pharmacy: "CLIM_ID_CD,CLIM_LN_NUMB,HCME_PLAN_ID_CD"
+
+# ================================
+# Filename Matching Configuration
+# ================================
+file_types:
+  facility_diag:
+    standardised_name: "FACILITY_DIAGNOSIS"
+  professional_diag:
+    standardised_name: "PROFESSIONAL_DIAGNOSIS"
+  lab:
+    standardised_name: "LAB_RESULTS"
+
+# ================================
+# Pattern Matching for Supplemental Files
+# ================================
+special_files:
+  mao_004:
+    pattern: "[MAO004PU]"
+  mmr:
+    pattern: "[MCMMEMD]"
+
+MAO_FILE_TYPE: "mao_supplemental_dx"
+
+# ================================
+# Delta Share Configuration
+# ================================
+delta_share_config:
+  schema: atomic
+
+# ================================
+# Delta Table Source Configuration
+# ================================
+delta_table_mappings:
+  # Supplemental tables - already split in Delta share
+  mao_004:
+    # MAO files are already split into multiple Delta tables
+    schema: "atomic"
+    tables:
+      - name: "medicare_mao_header"
+        source_table: "stm_stg_mao_header"
+        column_mapping:
+          RCD_TYP: "RECORD_TYPE"
+          RPT_ID: "REPORT_ID"
+          CONTRACT_ID: "CONTRACT_ID"
+          RPT_DT: "REPORT_DATE"
+          RPT_DESC: "REPORT_DESC"
+          SUBMR_FILE_TYP: "SUBMITTER_FILE_TYPE"
+          PHASE: "PHASE"
+          VER: "VERSION"
+
+      - name: "medicare_mac"
+        source_table: "stm_stg_mao_mac"
+        column_mapping:
+          DATASET_CODE: "HCME_PLAN_ID"
+          RCD_TYP: "RECORD_TYPE"
+          RPT_ID: "REPORT_ID"
+          CONTRACT_ID: "CONTRACT_ID"
+          MEMCR_EMRPCY_ID: "MBI"
+          EMCMTE_ICN: "ICN"
+          EMCMTE_TYP_SN: "ENCOUNTER_TYPE"
+          EMCMTE_ICN_LIKD_TO: "ENCOUNTER_ICN"
+          EMCMTE_ICN_LIKD_TO_STS: "ALLOWED_STATUS"
+          EMCMTE_SUBM_DT: "SUBMIT_DATE"
+          SERV_FROM_DT: "DOS_FROM"
+          SERV_THRU_DT: "DOS_THRU"
+          SRVC_TYP: "SERVICE_TYPE"
+          ALLWD_DISALWD_FLAG: "ALLOWED_FLAG"
+          ALLWD_DISALWD_RSM_CD: "REASON_CODE"
+          DIAG_ICD_TYP: "ICD_TYPE"
+          # Diagnosis columns remain the same
+          DIAG_CODE_01: "DIAG_CODE_01"
+          DIAG_FLAG_01: "DIAG_FLAG_01"
+          DIAG_CODE_02: "DIAG_CODE_02"
+          DIAG_FLAG_02: "DIAG_FLAG_02"
+          DIAG_CODE_03: "DIAG_CODE_03"
+          DIAG_FLAG_03: "DIAG_FLAG_03"
+          DIAG_CODE_04: "DIAG_CODE_04"
+          DIAG_FLAG_04: "DIAG_FLAG_04"
+          DIAG_CODE_05: "DIAG_CODE_05"
+          DIAG_FLAG_05: "DIAG_FLAG_05"
+          DIAG_CODE_06: "DIAG_CODE_06"
+          DIAG_FLAG_06: "DIAG_FLAG_06"
+          DIAG_CODE_07: "DIAG_CODE_07"
+          DIAG_FLAG_07: "DIAG_FLAG_07"
+          DIAG_CODE_08: "DIAG_CODE_08"
+          DIAG_FLAG_08: "DIAG_FLAG_08"
+          DIAG_CODE_09: "DIAG_CODE_09"
+          DIAG_FLAG_09: "DIAG_FLAG_09"
+          DIAG_CODE_10: "DIAG_CODE_10"
+          DIAG_FLAG_10: "DIAG_FLAG_10"
+          DIAG_CODE_11: "DIAG_CODE_11"
+          DIAG_FLAG_11: "DIAG_FLAG_11"
+          DIAG_CODE_12: "DIAG_CODE_12"
+          DIAG_FLAG_12: "DIAG_FLAG_12"
+          DIAG_CODE_13: "DIAG_CODE_13"
+          DIAG_FLAG_13: "DIAG_FLAG_13"
+          DIAG_CODE_14: "DIAG_CODE_14"
+          DIAG_FLAG_14: "DIAG_FLAG_14"
+          DIAG_CODE_15: "DIAG_CODE_15"
+          DIAG_FLAG_15: "DIAG_FLAG_15"
+          DIAG_CODE_16: "DIAG_CODE_16"
+          DIAG_FLAG_16: "DIAG_FLAG_16"
+          DIAG_CODE_17: "DIAG_CODE_17"
+          DIAG_FLAG_17: "DIAG_FLAG_17"
+          DIAG_CODE_18: "DIAG_CODE_18"
+          DIAG_FLAG_18: "DIAG_FLAG_18"
+          DIAG_CODE_19: "DIAG_CODE_19"
+          DIAG_FLAG_19: "DIAG_FLAG_19"
+          DIAG_CODE_20: "DIAG_CODE_20"
+          DIAG_FLAG_20: "DIAG_FLAG_20"
+          DIAG_CODE_21: "DIAG_CODE_21"
+          DIAG_FLAG_21: "DIAG_FLAG_21"
+          DIAG_CODE_22: "DIAG_CODE_22"
+          DIAG_FLAG_22: "DIAG_FLAG_22"
+          DIAG_CODE_23: "DIAG_CODE_23"
+          DIAG_FLAG_23: "DIAG_FLAG_23"
+          DIAG_CODE_24: "DIAG_CODE_24"
+          DIAG_FLAG_24: "DIAG_FLAG_24"
+          DIAG_CODE_25: "DIAG_CODE_25"
+          DIAG_FLAG_25: "DIAG_FLAG_25"
+          DIAG_CODE_26: "DIAG_CODE_26"
+          DIAG_FLAG_26: "DIAG_FLAG_26"
+          DIAG_CODE_27: "DIAG_CODE_27"
+          DIAG_FLAG_27: "DIAG_FLAG_27"
+          DIAG_CODE_28: "DIAG_CODE_28"
+          DIAG_FLAG_28: "DIAG_FLAG_28"
+          DIAG_CODE_29: "DIAG_CODE_29"
+          DIAG_FLAG_29: "DIAG_FLAG_29"
+          DIAG_CODE_30: "DIAG_CODE_30"
+          DIAG_FLAG_30: "DIAG_FLAG_30"
+          DIAG_CODE_31: "DIAG_CODE_31"
+          DIAG_FLAG_31: "DIAG_FLAG_31"
+          DIAG_CODE_32: "DIAG_CODE_32"
+          DIAG_FLAG_32: "DIAG_FLAG_32"
+          DIAG_CODE_33: "DIAG_CODE_33"
+          DIAG_FLAG_33: "DIAG_FLAG_33"
+          DIAG_CODE_34: "DIAG_CODE_34"
+          DIAG_FLAG_34: "DIAG_FLAG_34"
+          DIAG_CODE_35: "DIAG_CODE_35"
+          DIAG_FLAG_35: "DIAG_FLAG_35"
+          DIAG_CODE_36: "DIAG_CODE_36"
+          DIAG_FLAG_36: "DIAG_FLAG_36"
+          DIAG_CODE_37: "DIAG_CODE_37"
+          DIAG_FLAG_37: "DIAG_FLAG_37"
+          DIAG_CODE_38: "DIAG_CODE_38"
+          DIAG_FLAG_38: "DIAG_FLAG_38"
+
+      - name: "medicare_mao_trailer"
+        source_table: "stm_stg_mao_trailer"
+        column_mapping:
+          RCD_TYP: "RECORD_TYPE"
+          RPT_ID: "REPORT_ID"
+          CONTRACT_ID: "CONTRACT_ID"
+          TOT_RCDS_CNT: "TOTAL_RECORD_COUNT"
+
+  mmr:
+    # MMR is a single table
+    schema: "atomic"
+    tables:
+      - name: "mmr"
+        source_table: "stm_stg_mmr_clear"
+        column_mapping:
+          DATASET_CODE: "HCME_PLAN_ID"
+          MEMCR_CNTRCT_ID: "CONTRACT_NUMBER"
+          RUN_DT: "RUN_DATE"
+          PMT_DT: "PAYMENT_DATE"
+          MEMCR_EMRPCY_ID: "BENEFICIARY_ID"
+          BNFCRY_LAST_NM: "SURNAME"
+          BNFCRY_FRST_NM: "FIRST_NAME_INITIAL"
+          GENDER_CD: "GENDER_CODE"
+          BIRTH_DT: "DATE_OF_BIRTH"
+          STATE_CMTY_CD: "STATE_AND_COUNTY_CODE"
+          QOA_IND: "QOA_OF_AREA_INDICATOR"
+          PART_A_ENTLMNM: "PART_A_ENTITLEMENT"
+          PART_B_ENTLMNM: "PART_B_ENTITLEMENT"
+          HSPC: "HOSPICE"
+          ESRD: "ESRD"
+          AGE_DISBLD_MSP: "AGED_DISABLED_MSP"
+          NEW_MEDCD_BENFC_MEDCD_FLAG: "NEW_MEDICAID_BENEFICIARY_MEDICAID_STATUS_FLAG"
+          LTI_FLAG: "LTI_FLAG"
+          MEDCD_IND_IND: "MEDICAID_INDICATOR"
+          DEFLT_RISK_FACTOR_CD: "DEFAULT_RISK_FACTOR_CODE"
+          RISK_ADJ_FACTOR_A: "RISK_ADJUSTMENT_FACTOR_A"
+          RISK_ADJ_FACTOR_B: "RISK_ADJUSTMENT_FACTOR_B"
+          PPYT_MNTHS_PART_A: "NUMBER_OF_PAYMT_ADJUSTMT_MONTHS_PART_A"
+          PPYT_MNTHS_PART_B: "NUMBER_OF_PAYMT_ADJUSTMT_MONTHS_PART_B"
+          ADJ_RSN_CD: "ADJUSTMENT_REASON_CODE"
+          PPYT_START_DT: "PAYMT_ADJUSTMENT_START_DATE"
+          PPYT_END_DT: "PAYMT_ADJUSTMENT_END_DATE"
+          MNTHLY_RISK_ADJ_AMT_PART_A: "MONTHLY_PAYMT_ADJUSTMT_AMOUNT_RATE_A"
+          MNTHLY_RISK_ADJ_AMT_PART_B: "MONTHLY_PAYMT_ADJUSTMT_AMOUNT_RATE_B"
+          LIS_PREM_SBSDY: "LIS_PREMIUM_SUBSIDY"
+          ESRD_RSN_FLAG: "ESRD_FLAG"
+          HTM_ADD_CN: "MEDICATION_THERAPY_MANAGEMENT_HTM_ADD_ON"
+          PART_D_MANUFACTURER_DISCOUNT: "PART_D_MANUFACTURER_DISCOUNT"
+          MEDCD_FULL_PART_MONDUAL: "MEDICAID_STATUS"
+          RISK_ADJ_AGE_GRP_FLAG: "RISK_ADJUSTMENT_AGE_GROUP_FLAG"
+          PLAN_BMFT_PACK_ID: "PLAN_BENEFIT_PACKAGE_ID"
+          RISK_ADJ_FACTOR_TYP_CD: "RISK_ADJUSTMENT_FACTOR_TYPE_CODE"
+          FRLTRY_IND: "FRAILTY_INDICATOR"
+          ORIG_REASN_FOR_ENTITLEMENT_CODE_CRCC: "ORIGINAL_REASON_FOR_ENTITLEMENT_CODE_CRCC"
+          SEGMT_NUMB: "SEGMENT_NUMBER"
+          EGMP_FLAG: "EGMP_FLAG"
+          PART_C_PREM_PART_A_AMT: "PART_C_BASIC_PREMIUM_PART_A_AMOUNT"
+          PART_C_PREM_PART_B_AMT: "PART_C_BASIC_PREMIUM_PART_B_AMOUNT"
+          RBT_PART_A_COST_SHE_RED_AMT: "REBATE_FOR_PART_A_COST_SHARING_REDUCTION"
+          RBT_PART_B_COST_SHE_RED_AMT: "REBATE_FOR_PART_B_COST_SHARING_REDUCTION"
+          RBT_PART_A_SUPPL_BFNT_AMT: "REBATE_FOR_PART_A_SUPPLEMENTAL_BENEFITS_PART_A"
+          RBT_PART_B_SUPPL_BFNT_AMT: "REBATE_FOR_OTHER_PART_B_MANDATORY_SUPPLEMENTAL_BENEFITS"
+          RBT_PART_D_SUPPL_BFNT_AMT: "REBATE_FOR_PART_D_SUPPLEMENTAL_BENEFITS_PART_D_AMOUNT"
+          TOT_MA_PPT_PART_A_AMT: "TOTAL_PART_A_MA_PAYMENT"
+          TOT_MA_PPT_PART_B_AMT: "TOTAL_PART_B_MA_PAYMENT"
+          TOT_MA_PPT_PART_C_PPT_AMT: "TOTAL_PART_C_MA_PAYMENT_AMOUNT"
+          RISK_ADJ_FACTOR_D: "PART_D_PA_FACTOR"
+          PART_D_LOWINC_IND: "PART_D_LONG_INCOME_INDICATOR"
+          PART_D_LOWINC_MULT: "PART_D_LOW_INCOME_MULTIPLIER"
+          PART_D_LTI_IND: "PART_D_LONG_TERM_INSTITUTIONAL_INDICATOR"
+          PART_D_LTI_MULT: "PART_D_LONG_TERM_INSTITUTIONAL_MULTIPLIER"
+          RBT_PART_D_PREM_RED_AMT: "REBATE_FOR_PART_D_BASIC_PREMIUM_REDUCTION"
+          PART_D_PREM_AMT: "PART_D_BASIC_PREMIUM_AMOUNT"
+          PART_D_URG_SUBSDY_AMT: "PART_D_URGENT_SUBSIDY_MONTHLY_PAYMENT_AMOUNT"
+          REINS_SUBSDY_AMT: "REINSURANCE_SUBSIDY_AMOUNT"
+          LOWINC_SUBSDY_COST_SHR_AMT: "LOW_INCOME_SUBSIDY_COST_SHARING_AMOUNT"
+          TOT_PART_D_PPT_AMT: "TOTAL_PART_D_PAYMENT"
+          MMR_PPT_MNTHS_PART_D: "NUMBER_OF_PAYMT_ADJUSTMT_MONTHS_PART_D"
+          PACE_PREM_ADD_CN_AMT: "PACE_PREMIUM_ADD_ON"
+          PACE_COST_SHE_ADD_CN_AMT: "PACE_COST_SHARING_ADD_ON"
+          PART_C_FRLTTY_FACTOR: "PART_C_FRAILTY_SCORE_FACTOR"
+          MSP_RED_FACTOR: "MSP_REDUCTION_FACTOR"
+          MSP_RED_AMT_PART_A_AMT: "MSP_REDUCTION_ADJUSTMENT_AMOUNT_PART_A"
+          MSP_RED_AMT_PART_B_AMT: "MSP_REDUCTION_ADJUSTMENT_AMOUNT_PART_B"
+          PART_B_LONG_STS_CD: "PART_B_LONG_TERM_CARE_STATUS_CD"
+          PART_D_CVRAG_GAP_DISCOUNT_AMT: "PART_D_COVERAGE_GAP_DISCOUNT_AMOUNT"
+          PART_D_CVRAG_GAP_DISCOUNT_TYP: "PART_D_COVERAGE_GAP_DISCOUNT_TYPE"
+          PART_D_DEFLT_RISK_FACTOR_CD: "DEFAULT_PART_D_RISK_ADJUSTMENT_FACTOR_CODE"
+          PART_N_MNTHLY_RATE_PPT_ADJ: "PART_N_RISK_ADJUSTED_MONTHLY_RATE_AMOUNT_FOR_PYMT_ADJ"
+          PART_P_MNTHLY_RATE_PPT_ADJ: "PART_P_RISK_ADJUSTED_MONTHLY_RATE_AMOUNT_FOR_PYMT_ADJ"
+          PART_F_DIRECT_SUBSIDY_MTHLY_RATE_AMT: "PART_F_DIRECT_SUBSIDY_MONTHLY_RATE_ADJUSTMENT_AMOUNT"
+          CLUP_ID: "CLEANUP_ID"

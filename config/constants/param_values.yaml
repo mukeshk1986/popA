@@ -1,0 +1,300 @@
+# Parameter Values Configuration
+# This configuration file defines notebook paths and parameter values
+# for the EMIDS Population Advyzer data pipeline
+
+# ================================
+# Notebook Paths Configuration
+# ================================
+# Paths to Databricks notebooks organized by functional area
+notebook_paths:
+
+  # ================================
+  # Risk Score Calculation Notebooks
+  # ================================
+  # Notebooks for HCC, RxHCC, and ESRD risk score calculations
+  cms_hcc_risk_score_calc:
+    path: "/Repos/{env}/EMIDS-Population-Advyzer/src/spark/cms/cms_hcc_risk_score_calc"
+    description: "HCC (Hierarchical Condition Category) risk score calculation"
+    input: "member_hcc_data"
+    output: "hcc_risk_scores"
+
+  cms_rxhcc_risk_score_calc:
+    path: "/Repos/{env}/EMIDS-Population-Advyzer/src/spark/cms/cms_rxhcc_risk_score_calc"
+    description: "RxHCC (Pharmacy-based HCC) risk score calculation"
+    input: "pharmacy_claims"
+    output: "rxhcc_risk_scores"
+
+  cms_hcc_esrd_risk_score_calc:
+    path: "/Repos/{env}/EMIDS-Population-Advyzer/src/spark/cms/cms_hcc_esrd_risk_score_calc"
+    description: "ESRD (End-Stage Renal Disease) HCC risk score calculation"
+    input: "esrd_member_data"
+    output: "esrd_risk_scores"
+
+  # ================================
+  # Data Preparation Notebooks
+  # ================================
+  # Notebooks for preparing and loading data into the pipeline
+  data_loader_main:
+    path: "/Repos/{env}/EMIDS-Population-Advyzer/src/spark/data_loader/data_loader_main"
+    description: "Main data loader for ingesting source files"
+    input: "raw_source_files"
+    output: "loaded_claims_data"
+    dependencies:
+      - ddl_script_run
+      - load_reference_data_run
+
+  ma_model_input_data:
+    path: "/Repos/{env}/EMIDS-Population-Advyzer/src/spark/data_prep/ma_model_input_data"
+    description: "MA (Medicare Advantage) model input data preparation"
+    input: "transformed_claims"
+    output: "ma_model_inputs"
+
+  # ================================
+  # Data Transformation Notebooks
+  # ================================
+  # Notebooks for standardizing and transforming raw data
+  data_transformation_common:
+    path: "/Repos/{env}/EMIDS-Population-Advyzer/src/spark/data_standardization/ingestion_c_transformation"
+    description: "Common data transformation logic from ingestion to curation"
+    input: "ingestion_layer_data"
+    output: "transformation_layer_data"
+
+  qualifying_claims:
+    path: "/Repos/{env}/EMIDS-Population-Advyzer/src/spark/data_standardization/qualifying_claims"
+    description: "Identifies and processes qualifying claims for HCC assignment"
+    input: "claims_data"
+    output: "qualifying_claims_data"
+
+  pseudo_claims:
+    path: "/Repos/{env}/EMIDS-Population-Advyzer/src/spark/data_standardization/pseudo_ingest_to_transform"
+    description: "Generates pseudo claims for gap identification"
+    input: "member_data"
+    output: "pseudo_claims_data"
+
+  # ================================
+  # Plan Setup and Configuration Notebooks
+  # ================================
+  # Notebooks for initial plan setup and configuration
+  ddl_script_run:
+    path: "/Repos/{env}/EMIDS-Population-Advyzer/src/spark/plan_setup/ddl_script_run"
+    description: "Executes DDL scripts to create required schemas and tables"
+    phase: "setup"
+    order: 1
+    output: "schemas_and_tables"
+
+  dml_operation_schema:
+    path: "/Repos/{env}/EMIDS-Population-Advyzer/src/spark/plan_setup/dml_operation_schema"
+    description: "Executes DML operations for schema management"
+    phase: "setup"
+    order: 2
+
+  load_reference_data_run:
+    path: "/Repos/{env}/EMIDS-Population-Advyzer/src/spark/plan_setup/load_reference_data_run"
+    description: "Loads reference data required for transformations"
+    phase: "setup"
+    order: 3
+    output: "reference_tables"
+    examples:
+      - "diagnosis_codes"
+      - "procedure_codes"
+      - "provider_data"
+      - "member_demographics"
+
+  grant_permission:
+    path: "/Repos/{env}/EMIDS-Population-Advyzer/src/spark/plan_setup/grant_permission"
+    description: "Grants necessary permissions on tables and schemas"
+    phase: "setup"
+    order: 4
+
+  # ================================
+  # Validation Notebooks
+  # ================================
+  # Notebooks for data quality validation and reconciliation
+  validate:
+    path: "/Repos/{env}/EMIDS-Population-Advyzer/src/spark/validate"
+    description: "Validates data quality and completeness"
+    phase: "validation"
+    checks:
+      - "record_counts"
+      - "data_types"
+      - "required_fields"
+      - "referential_integrity"
+
+  # ================================
+  # Gap Identification Notebooks
+  # ================================
+  # Notebooks for identifying care gaps
+  gap_suspecting:
+    path: "/Repos/{env}/EMIDS-Population-Advyzer/src/gp_suspecting/gap_suspecting_main"
+    description: "Main gap suspecting workflow for care gap identification"
+    input: "medical_claims"
+    output: "suspected_gaps"
+    methods:
+      - "diagnosis_based"
+      - "procedure_based"
+      - "persistent_condition"
+      - "multi_step_exclusion"
+
+  # ================================
+  # Persistence and History Notebooks
+  # ================================
+  # Notebooks for tracking historical data
+  cms_persistence_hcc:
+    path: "/Repos/{env}/EMIDS-Population-Advyzer/src/spark/cms/cms_persistence_hcc"
+    description: "Maintains historical HCC persistence for carryforward logic"
+    input: "historical_hcc_data"
+    output: "hcc_persistence_table"
+
+# ================================
+# Environment Parameters
+# ================================
+# Environment-specific parameters
+environment:
+  repo_base: "/Repos/{env}/EMIDS-Population-Advyzer"
+
+  environments:
+    dev:
+      name: "Development"
+      description: "Development environment for testing"
+
+    test:
+      name: "Testing"
+      description: "Testing environment for UAT"
+
+    prod:
+      name: "Production"
+      description: "Production environment for live runs"
+
+# ================================
+# Pipeline Execution Order
+# ================================
+# Recommended execution sequence for pipeline notebooks
+pipeline_execution_order:
+  phase_1_setup:
+    order: 1
+    name: "Infrastructure Setup"
+    notebooks:
+      - "ddl_script_run"
+      - "dml_operation_schema"
+      - "load_reference_data_run"
+      - "grant_permission"
+    description: "Initialize schemas, tables, and reference data"
+
+  phase_2_data_ingestion:
+    order: 2
+    name: "Data Ingestion"
+    notebooks:
+      - "data_loader_main"
+    description: "Load raw source files into ingestion layer"
+
+  phase_3_transformation:
+    order: 3
+    name: "Data Transformation"
+    notebooks:
+      - "data_transformation_common"
+      - "qualifying_claims"
+      - "pseudo_claims"
+    description: "Transform and standardize ingestion data"
+
+  phase_4_preparation:
+    order: 4
+    name: "Model Data Preparation"
+    notebooks:
+      - "ma_model_input_data"
+    description: "Prepare data for risk model calculations"
+
+  phase_5_risk_calculation:
+    order: 5
+    name: "Risk Score Calculation"
+    notebooks:
+      - "cms_hcc_risk_score_calc"
+      - "cms_rxhcc_risk_score_calc"
+      - "cms_hcc_esrd_risk_score_calc"
+    description: "Calculate HCC, RxHCC, and ESRD risk scores"
+
+  phase_6_gap_identification:
+    order: 6
+    name: "Gap Identification"
+    notebooks:
+      - "gap_suspecting"
+    description: "Identify care gaps for outreach"
+
+  phase_7_persistence:
+    order: 7
+    name: "Persistence Management"
+    notebooks:
+      - "cms_persistence_hcc"
+    description: "Update historical persistence tables"
+
+  phase_8_validation:
+    order: 8
+    name: "Final Validation"
+    notebooks:
+      - "validate"
+    description: "Validate pipeline outputs and data quality"
+
+# ================================
+# Notebook Categories
+# ================================
+# Notebooks organized by functional category
+notebook_categories:
+  risk_scoring:
+    description: "Risk score calculation notebooks"
+    notebooks:
+      - "cms_hcc_risk_score_calc"
+      - "cms_rxhcc_risk_score_calc"
+      - "cms_hcc_esrd_risk_score_calc"
+
+  data_preparation:
+    description: "Data preparation and loading notebooks"
+    notebooks:
+      - "data_loader_main"
+      - "ma_model_input_data"
+      - "data_transformation_common"
+      - "qualifying_claims"
+      - "pseudo_claims"
+
+  setup_configuration:
+    description: "Plan setup and configuration notebooks"
+    notebooks:
+      - "ddl_script_run"
+      - "dml_operation_schema"
+      - "load_reference_data_run"
+      - "grant_permission"
+
+  validation_qa:
+    description: "Data quality and validation notebooks"
+    notebooks:
+      - "validate"
+
+  gap_management:
+    description: "Care gap identification and management"
+    notebooks:
+      - "gap_suspecting"
+
+  persistence:
+    description: "Historical data and persistence management"
+    notebooks:
+      - "cms_persistence_hcc"
+
+# ================================
+# Common Path Components
+# ================================
+# Reusable path components for notebook organization
+path_components:
+  repo_root: "/Repos/{env}/EMIDS-Population-Advyzer"
+  source_root: "/src/spark"
+
+  modules:
+    cms: "cms"
+    data_prep: "data_prep"
+    data_loader: "data_loader"
+    data_standardization: "data_standardization"
+    plan_setup: "plan_setup"
+    validate: "validate"
+    gp_suspecting: "gp_suspecting"
+
+  submodules:
+    ingestion_transformation: "ingestion_c_transformation"
+    qualifying_claims: "qualifying_claims"
+    pseudo_ingestion: "pseudo_ingest_to_transform"

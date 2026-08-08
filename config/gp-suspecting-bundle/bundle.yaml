@@ -1,0 +1,7 @@
+bundle:
+  name: gp-suspecting-bundle
+  include:
+  - variables.yaml
+  - permissions.yaml
+  - cluster_spec.yaml
+  - workflow/*.yaml
