@@ -1,0 +1,128 @@
+resources:
+  clusters:
+    # Large cluster for heavy processing workloads (data loading, transformation)
+    cms_risk_scoring_large:
+      cluster_name: CMS-RISK-LARGE
+      spark_version: $[var.spark_version]
+      node_type_id: $[var.large_cluster_node_type]
+      driver_node_type_id: $[var.large_cluster_driver_node_type]
+      num_workers: $[var.large_cluster_min_workers]
+      max_retries: 1
+
+      # Cluster configuration
+      spark_conf:
+        spark.databricks.delta.schema.autoMerge.enabled: "true"
+        spark.databricks.sql.adaptive.enabled: "true"
+        spark.sql.shuffle.partitions: "200"
+
+      # Security and access
+      data_security_mode: $[var.data_security_mode]
+      runtime_engine: $[var.runtime_engine]
+
+      # AWS attributes
+      aws_attributes:
+        zone_id: $[var.zone_id]
+        availability: $[var.availability]
+        instance_profile_arn: "arn:aws:iam::$[var.account_number]:instance-profile/$[var.instance_profile_name]"
+
+      # Environment variables and init scripts
+      init_scripts:
+        - workspace:
+            destination: /Workspace/config/init_scripts/cluster_init.sh
+
+      # Tags for resource management
+      custom_tags:
+        tenant: $[var.tenant]
+        project: $[var.project]
+        service: $[var.service]
+        billable: $[var.billable]
+        cluster_type: large
+
+      # Auto-termination
+      auto_termination_minutes: 30
+
+      # Worker and driver configurations
+      autoscale:
+        min_workers: $[var.large_cluster_min_workers]
+        max_workers: $[var.large_cluster_max_workers]
+
+      driver_instance_pool_id: null
+      instance_pool_id: null
+
+    # Standard cluster for typical workloads
+    cms_risk_scoring_standard:
+      cluster_name: CMS-RISK-STANDARD
+      spark_version: $[var.spark_version]
+      node_type_id: $[var.standard_cluster_node_type]
+      driver_node_type_id: $[var.standard_cluster_driver_node_type]
+      num_workers: $[var.standard_cluster_min_workers]
+      max_retries: 1
+
+      # Cluster configuration
+      spark_conf:
+        spark.databricks.delta.schema.autoMerge.enabled: "true"
+        spark.databricks.sql.adaptive.enabled: "true"
+        spark.sql.shuffle.partitions: "100"
+
+      # Security and access
+      data_security_mode: $[var.data_security_mode]
+      runtime_engine: $[var.runtime_engine]
+
+      # AWS attributes
+      aws_attributes:
+        zone_id: $[var.zone_id]
+        availability: $[var.availability]
+        instance_profile_arn: "arn:aws:iam::$[var.account_number]:instance-profile/$[var.instance_profile_name]"
+
+      # Tags for resource management
+      custom_tags:
+        tenant: $[var.tenant]
+        project: $[var.project]
+        service: $[var.service]
+        billable: $[var.billable]
+        cluster_type: standard
+
+      # Auto-termination
+      auto_termination_minutes: 30
+
+      # Worker and driver configurations
+      autoscale:
+        min_workers: $[var.standard_cluster_min_workers]
+        max_workers: $[var.standard_cluster_max_workers]
+
+      driver_instance_pool_id: null
+      instance_pool_id: null
+
+  # Job cluster configuration (ephemeral, created per job run)
+  job_clusters:
+    - job_cluster_key: CMS-RISK-LARGE
+      new_cluster:
+        cluster_name: CMS-RISK-LARGE-{{job_id}}
+        spark_version: $[var.spark_version]
+        node_type_id: $[var.large_cluster_node_type]
+        driver_node_type_id: $[var.large_cluster_driver_node_type]
+        num_workers: $[var.large_cluster_min_workers]
+
+        spark_conf:
+          spark.databricks.delta.schema.autoMerge.enabled: "true"
+          spark.databricks.sql.adaptive.enabled: "true"
+          spark.sql.shuffle.partitions: "200"
+
+        data_security_mode: $[var.data_security_mode]
+        runtime_engine: $[var.runtime_engine]
+
+        aws_attributes:
+          zone_id: $[var.zone_id]
+          availability: $[var.availability]
+          instance_profile_arn: "arn:aws:iam::$[var.account_number]:instance-profile/$[var.instance_profile_name]"
+
+        custom_tags:
+          tenant: $[var.tenant]
+          project: $[var.project]
+          service: $[var.service]
+          billable: $[var.billable]
+          ephemeral: "true"
+
+        autoscale:
+          min_workers: $[var.large_cluster_min_workers]
+          max_workers: $[var.large_cluster_max_workers]

@@ -1,0 +1,285 @@
+resources:
+  jobs:
+    cms_risk_scoring_wf:
+      name: cms_risk_scoring_wf
+      run_name: "cms_risk_scoring_wf_[{{job.parameters.plan_name}}]_[{{job.trigger_time}}]"
+      max_concurrent_runs: $[var.max_concurrent_runs]
+
+parameters:
+  # Common
+  - name: env
+    default: $[var.env]
+  - name: catalog
+    default: $[var.catalog_name]
+  - name: run_id
+    default: "[[job.run_id]]"
+
+  # Ingestion
+  - name: plan_name
+    default: ""
+  - name: ingestion_tables          # Stage-specific used by data_loader_main
+    default: ""
+  - name: batch_id
+    default: ""
+  - name: supp_source_load_month    # For supplemental data (MAO) in ingestion
+    default: ""
+  - name: supp_source_load_year     # For supplemental data (MAO) in ingestion
+    default: ""
+
+  # --- Transformation
+  - name: transformation_tables      # Stage-specific used by ingestion_to_transformation
+    default: ""
+  - name: pseudo_claim_tables        # Stage-specific used by pseudo_ingest_to_transform
+    default: ""
+  - name: source_load_month          # Standardized date param for transformation/scoring
+    default: ""
+  - name: source_load_year           # Standardized date param for transformation/scoring
+    default: ""
+  - name: historical_flag
+    default: "N"
+  - name: mor_type_table
+    default: ""
+  - name: historical_flag            # Used by transformation notebooks
+    default: ""
+
+  # --- Risk-model common fields
+  - name: model
+    default: ""
+  - name: home_plan_id
+    default: ""
+  - name: contract
+    default: ""
+  - name: time_periods               # Comma-separated time periods (e.g., "1,2,3")
+    default: ""
+  - name: versions                   # Comma-separated versions (e.g., "v24,v28")
+    default: ""
+  - name: incl_supplemental_mmr
+    default: ""
+  - name: incl_pseudo_claim
+    default: ""
+
+tasks:
+  #====================================================================
+  # Data Ingestion Stage
+  # Mirrors: data_loader_main + validate_ingestion tasks in data_ingestion DAG
+  #====================================================================
+  - task_key: data_loader_main
+    notebook_task:
+      notebook_path: $[var.notebook_basepath]/spark/data_loader/data_loader_main
+      base_parameters:
+        exec_notebook_path: $[var.notebook_basepath]/spark/data_loader/data_loader_main
+        job_run_id: "[[job.run_id]]"
+        env: "[[job.parameters.env]]"
+        catalog: "[[job.parameters.catalog]]"
+        plan_name: "[[job.parameters.plan_name]]"
+        ingestion_tables: "[[job.parameters.ingestion_tables]]"
+        batch_id: "[[job.parameters.batch_id]]"
+        supp_source_load_month: "[[job.parameters.supp_source_load_month]]"
+        supp_source_load_year: "[[job.parameters.supp_source_load_year]]"
+        source: WORKSPACE
+    job_cluster_key: CMS-RISK-LARGE
+
+  - task_key: validate_ingestion
+    depends_on:
+      - task_key: data_loader_main
+    notebook_task:
+      notebook_path: $[var.notebook_basepath]/spark/validate
+      base_parameters:
+        exec_notebook_path: $[var.notebook_basepath]/spark/validate
+        job_run_id: "[[job.run_id]]"
+        env: "[[job.parameters.env]]"
+        catalog: "[[job.parameters.catalog]]"
+        validate_stage_name: "data_ingestion"
+        plan_name: "[[job.parameters.plan_name]]"
+        source: WORKSPACE
+    job_cluster_key: CMS-RISK-LARGE
+
+  #====================================================================
+  # Data Transformation Stage
+  # Mirrors: data_transformation DAG
+  #
+  # DAG dependency chain:
+  #   data_transformation_common >> validate_transformation >> qualifying_claims >> pseudo_claims
+  #   data_transformation_common >> validate_transformation >> mor_health_events
+  #====================================================================
+  - task_key: data_transformation_common
+    depends_on:
+      - task_key: validate_ingestion
+    notebook_task:
+      notebook_path: $[var.notebook_basepath]/spark/data_standardization/ingestion_to_transformation
+      base_parameters:
+        exec_notebook_path: $[var.notebook_basepath]/spark/data_standardization/ingestion_to_transformation
+        job_run_id: "[[job.run_id]]"
+        env: "[[job.parameters.env]]"
+        catalog: "[[job.parameters.catalog]]"
+        plan_name: "[[job.parameters.plan_name]]"
+        transformation_tables: "[[job.parameters.transformation_tables]]"
+        source_load_month: "[[job.parameters.source_load_month]]"
+        source_load_year: "[[job.parameters.source_load_year]]"
+        historical_flag: "[[job.parameters.historical_flag]]"
+        source: WORKSPACE
+    job_cluster_key: CMS-RISK-LARGE
+
+  - task_key: validate_transformation
+    depends_on:
+      - task_key: data_transformation_common
+    notebook_task:
+      notebook_path: $[var.notebook_basepath]/spark/validate
+      base_parameters:
+        exec_notebook_path: $[var.notebook_basepath]/spark/validate
+        job_run_id: "[[job.run_id]]"
+        env: "[[job.parameters.env]]"
+        catalog: "[[job.parameters.catalog]]"
+        validate_stage_name: "data_transformation"
+        plan_name: "[[job.parameters.plan_name]]"
+        source: WORKSPACE
+    job_cluster_key: CMS-RISK-LARGE
+
+  - task_key: qualifying_claims
+    depends_on:
+      - task_key: validate_transformation
+    notebook_task:
+      notebook_path: $[var.notebook_basepath]/spark/data_standardization/qualifying_claims
+      base_parameters:
+        exec_notebook_path: $[var.notebook_basepath]/spark/data_standardization/qualifying_claims
+        job_run_id: "[[job.run_id]]"
+        env: "[[job.parameters.env]]"
+        catalog: "[[job.parameters.catalog]]"
+        plan_name: "[[job.parameters.plan_name]]"
+        source_load_month: "[[job.parameters.source_load_month]]"
+        source_load_year: "[[job.parameters.source_load_year]]"
+        source: WORKSPACE
+    job_cluster_key: CMS-RISK-LARGE
+
+  - task_key: pseudo_claims
+    depends_on:
+      - task_key: validate_transformation
+    notebook_task:
+      notebook_path: $[var.notebook_basepath]/spark/data_standardization/pseudo_ingest_to_transform
+      base_parameters:
+        exec_notebook_path: $[var.notebook_basepath]/spark/data_standardization/pseudo_ingest_to_transform
+        job_run_id: "[[job.run_id]]"
+        env: "[[job.parameters.env]]"
+        catalog: "[[job.parameters.catalog]]"
+        plan_name: "[[job.parameters.plan_name]]"
+        pseudo_claim_tables: "[[job.parameters.pseudo_claim_tables]]"
+        source_load_month: "[[job.parameters.source_load_month]]"
+        source_load_year: "[[job.parameters.source_load_year]]"
+        historical_flag: "[[job.parameters.historical_flag]]"
+        source: WORKSPACE
+    job_cluster_key: CMS-RISK-LARGE
+
+  - task_key: mor_health_events
+    depends_on:
+      - task_key: validate_transformation
+    notebook_task:
+      notebook_path: $[var.notebook_basepath]/spark/data_standardization/mor_to_health_events_load
+      base_parameters:
+        exec_notebook_path: $[var.notebook_basepath]/spark/data_standardization/mor_to_health_events_load
+        job_run_id: "[[job.run_id]]"
+        env: "[[job.parameters.env]]"
+        catalog: "[[job.parameters.catalog]]"
+        plan_name: "[[job.parameters.plan_name]]"
+        mor_type_table: "[[job.parameters.mor_type_table]]"
+        source_load_month: "[[job.parameters.source_load_month]]"
+        source_load_year: "[[job.parameters.source_load_year]]"
+        source: WORKSPACE
+    job_cluster_key: CMS-RISK-LARGE
+
+  #====================================================================
+  # Data Curation Stage
+  # Mirrors: data_curation DAG (ra data_curation task in parent DAG)
+  # Fan-in: waits for both parallel transformation branches to complete.
+  #====================================================================
+  - task_key: ma_model_input_data
+    depends_on:
+      - task_key: pseudo_claims
+      - task_key: mor_health_events
+    notebook_task:
+      notebook_path: $[var.notebook_basepath]/spark/data_prep/ma_model_input_data
+      base_parameters:
+        exec_notebook_path: $[var.notebook_basepath]/spark/data_prep/ma_model_input_data
+        job_run_id: "[[job.run_id]]"
+        env: "[[job.parameters.env]]"
+        catalog: "[[job.parameters.catalog]]"
+        plan_name: "[[job.parameters.plan_name]]"
+        source_load_month: "[[job.parameters.source_load_month]]"
+        source_load_year: "[[job.parameters.source_load_year]]"
+        source: WORKSPACE
+    job_cluster_key: CMS-RISK-LARGE
+
+  #====================================================================
+  # CMS HCC Risk Scoring
+  # Accepts comma-separated versions (e.g., "v24,v28") and time_periods (e.g., "1,2,3")
+  #====================================================================
+  - task_key: cms_hcc_risk_score_calc
+    depends_on:
+      - task_key: ma_model_input_data
+    notebook_task:
+      notebook_path: $[var.notebook_basepath]/spark/cms/cms_hcc_risk_score_calc
+      base_parameters:
+        exec_notebook_path: $[var.notebook_basepath]/spark/cms/cms_hcc_risk_score_calc
+        job_run_id: "[[job.run_id]]"
+        env: "[[job.parameters.env]]"
+        catalog: "[[job.parameters.catalog]]"
+        plan_name: "[[job.parameters.plan_name]]"
+        model: "[[job.parameters.model]]"
+        home_plan_id: "[[job.parameters.home_plan_id]]"
+        contract: "[[job.parameters.contract]]"
+        time_periods: "[[job.parameters.time_periods]]"
+        versions: "[[job.parameters.versions]]"
+        plan_name: "[[job.parameters.plan_name]]"
+        incl_supplemental_mmr: "[[job.parameters.incl_supplemental_mmr]]"
+        incl_pseudo_claim: "[[job.parameters.incl_pseudo_claim]]"
+        source_load_month: "[[job.parameters.source_load_month]]"
+        source_load_year: "[[job.parameters.source_load_year]]"
+        source: WORKSPACE
+    job_cluster_key: CMS-RISK-LARGE
+
+  #====================================================================
+  # Data Curation Stage
+  # Mirrors: data_curation DAG (ra data_curation task in parent DAG)
+  #====================================================================
+  - task_key: ma_model_input_data
+    depends_on:
+      - task_key: pseudo_claims
+      - task_key: mor_health_events
+    notebook_task:
+      notebook_path: $[var.notebook_basepath]/spark/data_prep/ma_model_input_data
+      base_parameters:
+        exec_notebook_path: $[var.notebook_basepath]/spark/data_prep/ma_model_input_data
+        job_run_id: "[[job.run_id]]"
+        env: "[[job.parameters.env]]"
+        catalog: "[[job.parameters.catalog]]"
+        plan_name: "[[job.parameters.plan_name]]"
+        source_load_month: "[[job.parameters.source_load_month]]"
+        source_load_year: "[[job.parameters.source_load_year]]"
+        source: WORKSPACE
+    job_cluster_key: CMS-RISK-LARGE
+
+  #====================================================================
+  # CMS HCC Risk Scoring
+  # Accepts comma-separated versions (e.g., "v24,v28") and time_periods (e.g., "1,2,3")
+  #====================================================================
+  - task_key: hcc_risk_score_calc
+    depends_on:
+      - task_key: ma_model_input_data
+    notebook_task:
+      notebook_path: $[var.notebook_basepath]/spark/cms/cms_hcc_risk_score_calc
+      base_parameters:
+        exec_notebook_path: $[var.notebook_basepath]/spark/cms/cms_hcc_risk_score_calc
+        job_run_id: "[[job.run_id]]"
+        env: "[[job.parameters.env]]"
+        catalog: "[[job.parameters.catalog]]"
+        model: "[[job.parameters.model]]"
+        home_plan_id: "[[job.parameters.home_plan_id]]"
+        contract: "[[job.parameters.contract]]"
+        time_periods: "[[job.parameters.time_periods]]"
+        versions: "[[job.parameters.versions]]"
+        plan_name: "[[job.parameters.plan_name]]"
+        incl_supplemental_mmr: "[[job.parameters.incl_supplemental_mmr]]"
+        incl_pseudo_claim: "[[job.parameters.incl_pseudo_claim]]"
+        source_load_month: "[[job.parameters.source_load_month]]"
+        source_load_year: "[[job.parameters.source_load_year]]"
+        source: WORKSPACE
+    job_cluster_key: CMS-RISK-LARGE

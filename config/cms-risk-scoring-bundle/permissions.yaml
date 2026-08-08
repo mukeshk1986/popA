@@ -1,0 +1,93 @@
+resources:
+  # Permissions for the CMS Risk Scoring Workflow
+  permissions:
+    # Job permissions - allow ETL service principal to view/run the job
+    job_cms_risk_scoring:
+      object_id: ${{resources.jobs.cms_risk_scoring_wf.id}}
+      object_type: job
+      access_controls:
+        - user_name: $[var.etl_service_principal]
+          permission_level: CAN_MANAGE_RUN
+        - user_name: $[var.etl_service_principal]
+          permission_level: CAN_VIEW
+
+    # Cluster permissions - allow service principal to attach to clusters
+    cluster_cms_risk_scoring_large:
+      object_id: ${{resources.clusters.cms_risk_scoring_large.id}}
+      object_type: cluster
+      access_controls:
+        - user_name: $[var.etl_service_principal]
+          permission_level: CAN_ATTACH_TO
+        - user_name: $[var.etl_service_principal]
+          permission_level: CAN_RESTART
+
+    cluster_cms_risk_scoring_standard:
+      object_id: ${{resources.clusters.cms_risk_scoring_standard.id}}
+      object_type: cluster
+      access_controls:
+        - user_name: $[var.etl_service_principal]
+          permission_level: CAN_ATTACH_TO
+        - user_name: $[var.etl_service_principal]
+          permission_level: CAN_RESTART
+
+  # Workspace access controls
+  workspace_permissions:
+    # Allow ETL service principal to read notebooks in the workspace
+    notebook_workspace_path:
+      path: $[var.notebook_basepath]
+      object_type: directory
+      access_controls:
+        - user_name: $[var.etl_service_principal]
+          permission_level: READ
+
+  # Catalog and schema permissions
+  catalog_permissions:
+    cms_catalog_access:
+      name: $[var.catalog_name]
+      object_type: catalog
+      access_controls:
+        - user_name: $[var.etl_service_principal]
+          permission_level: USE_CATALOG
+
+  schema_permissions:
+    # Schema-level permissions for transformation tables
+    transformation_schema:
+      name: transformation
+      parent: $[var.catalog_name]
+      object_type: schema
+      access_controls:
+        - user_name: $[var.etl_service_principal]
+          permission_level: USE_SCHEMA
+        - user_name: $[var.etl_service_principal]
+          permission_level: CREATE_TABLE
+
+    # Schema for risk scoring
+    risk_scoring_schema:
+      name: risk_scoring
+      parent: $[var.catalog_name]
+      object_type: schema
+      access_controls:
+        - user_name: $[var.etl_service_principal]
+          permission_level: USE_SCHEMA
+        - user_name: $[var.etl_service_principal]
+          permission_level: CREATE_TABLE
+
+    # Schema for ingestion
+    ingestion_schema:
+      name: ingestion
+      parent: $[var.catalog_name]
+      object_type: schema
+      access_controls:
+        - user_name: $[var.etl_service_principal]
+          permission_level: USE_SCHEMA
+        - user_name: $[var.etl_service_principal]
+          permission_level: CREATE_TABLE
+
+  # Secret scope permissions for Databricks tokens
+  secret_scope_permissions:
+    service_principal_scope:
+      scope: $[var.db_token_secret_name]
+      object_type: secret_scope
+      access_controls:
+        - principal_id: $[var.etl_service_principal]
+          permission_level: READ

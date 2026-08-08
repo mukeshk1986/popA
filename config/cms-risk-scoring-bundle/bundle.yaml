@@ -1,0 +1,7 @@
+bundle:
+  name: cms-risk-scoring-bundle
+  include:
+    - variables.yaml
+    - permissions.yaml
+    - cluster_spec.yaml
+    - workflow/*.yaml
