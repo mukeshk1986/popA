@@ -6,6 +6,7 @@ repo_root = "/Workspace/Repos/DEV/popA"
 if repo_root not in sys.path:
     sys.path.insert(0, repo_root)
 
+from src.spark.helpers.config_util import get_config_yaml
 from src.spark.helpers.logger_util import get_logger
 from src.spark.helpers.databricks_util import get_plan_name, get_path_plan_name
 from src.spark.helpers.generic_util import ingestion_folder_check
@@ -96,7 +97,16 @@ sam_ref_schema = plan_schemas["sam_ref"]
 sam_stage_schema = plan_schemas["sam_stage"]
 sam_work_schema = plan_schemas["sam_work"]
 sam_result_schema = plan_schemas["sam_result"]
-
+# COMMAND ----------
+# DBTITLE 1, Ce11 4
+from src.spark.helpers.config_util import get_config_yaml
+from src.spark.helpers.logger_util import get_logger
+from src.spark.helpers.generic_util import ingestion_folder_check,config_plan_setup
+config = get_config_yaml("../../../config/environments/"+env+"/values.yaml")
+# Initialize logger
+logger = get_logger()
+catalog = config["catalog"]
+config_plan_setup(spark, catalog, ref_schema, gap_schema_curation, schema_curation, schema_transformation, env_bucket, schema v_schema_plan_name, sam_ref_schema=sam_ref_schema, sam_stage_schema=sam_stage_schema, sam_work_schema=sam_work_schema, san_resu schema_curation_supp=schema_curation_supp, gap_schema_curation_supp=gap_schema_curation_supp, schema_list=schema_list)
 # COMMAND ----------
 
 volume_name = "ingestion"
