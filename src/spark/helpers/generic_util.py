@@ -239,9 +239,11 @@ def config_plan_setup(spark, catalog, ref_schema, gap_schema_curation, schema_cu
     {plan_name}_gap_curation_supp). They are provisioned alongside the base
     schemas so supplemental risk-scoring output is physically segregated.
     """
-    if schema_list is []:
-        logger.info("Executing config plan setup")
-        ddl_groups = {
+    ddl_files = []
+    if schema_list is None:
+        schema_list = []
+    logger.info("Executing config plan setup")
+    ddl_groups = {
             "schema_creation": ["schema_creation"],
             "ingestion": ["ingestion_tables"],
             "monitoring": ["monitoring_tables"],
@@ -249,13 +251,13 @@ def config_plan_setup(spark, catalog, ref_schema, gap_schema_curation, schema_cu
             "reference": ["ma_ra_reference_tables"],
             "ma_dashboard": ["ma_dashboard_ref_tables"]
         }
-        reference_schema_values = {"ma": "ma_reference", "aca": "aca_reference"}
-        ma_dashboard_schema_values = {"ma_dashboard": "ma_dashboard_reference"}
+    reference_schema_values = {"ma": "ma_reference", "aca": "aca_reference"}
+    ma_dashboard_schema_values = {"ma_dashboard": "ma_dashboard_reference"}
 
     if not schema_list:
         raise ValueError("schema_list cannot be empty. Provide at least one schema name.")
 
-    ddl_files = []
+    
     invalid_schema_names = []
     all_ddl_files = [ddl for ddl_list in ddl_groups.values() for ddl in ddl_list]
 
