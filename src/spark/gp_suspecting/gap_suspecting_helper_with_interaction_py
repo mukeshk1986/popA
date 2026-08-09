@@ -1,0 +1,3230 @@
+
+from src.spark.helpers.databricks_util import read_table, write_table, clean_up
+from src.spark.helpers.logger_util import get_logger
+from pyspark.sql import DataFrame
+from pyspark.sql.window import Window
+from pyspark.sql.types import DecimalType, StringType, List
+from pyspark.sql.column import Column
+import pyspark.sql.functions as F
+from datetime import datetime
+from pyspark.sql.functions import (
+    col, to_date, year, current_date, array, expr, array_distinct, when, lower, 
+    collect_list, flatten, explode, concat, lit, array_except, countDistinct,
+    coalesce, first, array_intersect, size, rand, floor, array_contains, 
+    round, split, current_timestamp, trim, collect_set, concat_ws, to_json, struct, 
+    regexp_replace, upper, broadcast, explode_outer, element_at, datediff, length, 
+    lpad, regexp_extract, max as spark_max, date_sub, add_months
+)
+from typing import Optional
+from functools import reduce
+from operator import or_, and_
+from collections import OrderedDict
+
+logging = get_logger()
+
+def add_suppression1_on_draft_gap(df_final_gap, df_ref_hirarchy):
+    """
+    Adds SUPPRESSION1_YN and SUPPRESSED_BY_PARENT columns to df_final_gap based on parent-child CC_CODE suppression logic.
+    For each group (MEMBER_BID, METHOD_ID, RISK_YEAR, HOME_PLAN_ID_CD, MODEL_VERSION):
+      - If both parent and child CC_CODE are present, mark SUPPRESSION1_YN='Y' for child, else 'N'.
+      - SUPPRESSED_BY_PARENT captures the parent CC_CODE that caused suppression.
+    CC_CODE is 'CC' + 3-digit zero-padded number.
+    """
+    
+    # 1. Prepare hierarchy: explode children, pad to 3 digits, prefix 'CC', keep version
+    df_hier = (
+        df_ref_hirarchy
+        .withColumn("parent_cc", F.concat(F.lit("CC"), F.lpad(F.col("parent").cast("string"), 3, "0")))
+        .withColumn("child", F.explode(F.split(F.regexp_replace(F.col("child"), r"\s*", ""), ",")))
+        .withColumn("child_cc", F.concat(F.lit("CC"), F.lpad(F.col("child").cast("string"), 3, "0")))
+        .select(F.col("version").alias("hier_version"), "parent_cc", "child_cc")
+        .distinct()
+    )
+
+    # 2. Prepare main df: ensure CC_CODE is string and padded
+    df_with_padded = df_final_gap.withColumn(
+        "CC_CODE_PADDED",
+        F.concat(F.lit("CC"), F.lpad(F.regexp_extract(F.col("CC_CODE"), r"(\d+)", 1), 3, "0"))
+    )
+
+    # 3. Self-join to find suppressed children
+    group_cols = ["MEMBER_BID", "METHOD_ID", "RISK_YEAR", "HOME_PLAN_ID_CD", "MODEL_VERSION"]
+    
+    # Find children that have their parent present in the same group
+    suppressed = (
+        df_with_padded.alias("child")
+        .join(
+            df_with_padded.alias("parent"),
+            [F.col(f"child.{c}") == F.col(f"parent.{c}") for c in group_cols],
+            "inner"
+        )
+        .join(
+            df_hier,
+            (F.col("parent.CC_CODE_PADDED") == F.col("parent_cc")) &
+            (F.col("child.CC_CODE_PADDED") == F.col("child_cc")) &
+            (F.col("child.MODEL_VERSION") == F.col("hier_version")),
+            "inner"
+        )
+        .select(
+            *[F.col(f"child.{c}") for c in group_cols],
+            F.col("child.CC_CODE_PADDED"),
+            F.lit('Y').alias("SUPPRESSION1_YN"),
+            F.col("parent.CC_CODE").alias("SUPPRESSED_BY_PARENT")
+        )
+        .dropDuplicates(group_cols + ["CC_CODE_PADDED"])
+    )
+
+    # 4. Add suppression columns to all rows
+    df_all = df_with_padded.withColumn("SUPPRESSION1_YN", F.lit('N')).withColumn("SUPPRESSED_BY_PARENT", F.lit(None).cast("string"))
+
+    # 5. Overwrite with 'Y' where suppressed
+    join_conditions = [F.col(f"all.{c}") == F.col(f"sup.{c}") for c in group_cols]
+    join_conditions.append(F.col("all.CC_CODE_PADDED") == F.col("sup.CC_CODE_PADDED"))
+    join_condition = reduce(and_, join_conditions)
+    
+    df_out = (
+        df_all.alias("all")
+        .join(
+            suppressed.alias("sup"),
+            join_condition,
+            "left"
+        )
+        .select(
+            *[F.col(f"all.{c}") for c in df_final_gap.columns],
+            F.when(F.col("sup.SUPPRESSION1_YN") == 'Y', 'Y').otherwise(F.lit('N')).alias("SUPPRESSION1_YN"),
+            F.when(F.col("sup.SUPPRESSION1_YN") == 'Y', F.col("sup.SUPPRESSED_BY_PARENT")).otherwise(F.lit(None).cast("string")).alias("SUPPRESSED_BY_PARENT")
+        )
+    )
+
+    # 6. Reorder columns: insert SUPPRESSION1_YN and SUPPRESSED_BY_PARENT after CC_CODE
+    cols = df_final_gap.columns
+    if 'CC_CODE' in cols:
+        idx = cols.index('CC_CODE')
+        new_cols = cols[:idx+1] + ['SUPPRESSION1_YN', 'SUPPRESSED_BY_PARENT'] + [c for c in cols[idx+1:] if c not in ['SUPPRESSION1_YN', 'SUPPRESSED_BY_PARENT']]
+    else:
+        new_cols = cols + ['SUPPRESSION1_YN', 'SUPPRESSED_BY_PARENT']
+    
+    return df_out.select(*new_cols)
+
+def two_level_suppression_logic_final(
+    df_final_gap: DataFrame,
+    df_member_cc_with_BID: DataFrame,
+    df_ref_hirarchy: DataFrame
+) -> DataFrame:
+    """
+    Adds SUPPRESSION2_YN column to df_final_gap based on external CC hierarchy suppression.
+    Uses existing SUPPRESSION1_YN and SUPPRESSED_BY_PARENT columns from df_final_gap.
+    
+    Suppression2 Logic:
+    - For gaps not already suppressed (SUPPRESSION1_YN='N'), checks if their parent/grandparent 
+      exists in member's existing CC codes (from risk_member_output)
+    - If parent found in member's CCs, marks SUPPRESSION2_YN='Y', otherwise 'N'
+
+    Parameters:
+    -----------
+    df_final_gap : DataFrame
+        DataFrame containing gap data with SUPPRESSION1_YN and SUPPRESSED_BY_PARENT already populated
+    df_member_cc_with_BID : DataFrame
+        DataFrame containing member CC codes with BID (CC_Code1..CC_Code100)
+    df_ref_hirarchy : DataFrame
+        DataFrame containing parent-child hierarchy relationships
+
+    Returns:
+    --------
+    DataFrame
+        Original df_final_gap with SUPPRESSION2_YN column added
+    """
+
+    # =========================
+    # STEP 1: Build hierarchy lookup for parent-child relationships
+    # =========================
+    hierarchy_lookup = (
+        df_ref_hirarchy
+        .withColumn("child", F.explode(F.split(F.col("child"), ",")))
+        .withColumn("child", F.trim(F.col("child")).cast("int"))
+        .withColumn("parent", F.col("parent").cast("int"))
+        .select("version", "parent", "child")
+        .dropDuplicates()
+    )
+    
+    # =========================
+    # STEP 2: Extract numeric CC_CODE for matching with hierarchy
+    # =========================
+    df_gaps_with_numeric_cc = df_final_gap.withColumn(
+        "CC_CODE_NUM",
+        F.regexp_extract(F.col("CC_CODE"), r"(\d+)", 1).cast("int")
+    )
+    
+    # =========================
+    # STEP 3: Find parent codes for each gap (only for non-suppressed gaps)
+    # =========================
+    # For gaps where SUPPRESSION1_YN = 'N', find their parent codes from hierarchy
+    gaps_with_parents = (
+        df_gaps_with_numeric_cc.alias("gap")
+        .filter(F.coalesce(F.col("SUPPRESSION1_YN"), F.lit("N")) == "N")
+        .join(
+            hierarchy_lookup.alias("hier"),
+            (F.col("gap.CC_CODE_NUM") == F.col("hier.child")) &
+            (F.col("gap.MODEL_VERSION") == F.col("hier.version")),
+            "left"
+        )
+        .select(
+            F.col("gap.MEMBER_BID"),
+            F.col("gap.MODEL_VERSION"),
+            F.col("gap.RISK_YEAR"),
+            F.col("gap.CC_CODE"),
+            F.col("gap.CC_CODE_NUM"),
+            F.col("hier.parent").alias("PARENT_CODE")
+        )
+        .filter(F.col("PARENT_CODE").isNotNull())
+    )
+    
+    # =========================
+    # STEP 4: Build array of member's existing CC codes from CC_Code1..CC_Code100
+    # =========================
+    df_member_cc_array = (
+        df_member_cc_with_BID
+        .select(
+            "MEMBER_BID",
+            "RISK_MODEL_VERSION",
+            "RISK_YEAR",
+            F.array(*[
+                F.regexp_extract(
+                    F.upper(F.trim(F.col(f"CC_Code{i}"))),
+                    r"^(CC\d+)$",
+                    1
+                )
+                for i in range(1, 101)  # Check all 100 CC_Code columns
+            ]).alias("all_cc_codes")
+        )
+        .withColumn(
+            "all_cc_codes",
+            F.array_distinct(
+                F.filter(
+                    F.col("all_cc_codes"),
+                    lambda x: (x.isNotNull()) & (x != "")
+                )
+            )
+        )
+    )
+    
+    # =========================
+    # STEP 5: Check if parent exists in member's existing CCs
+    # =========================
+    suppression2_flags = (
+        gaps_with_parents.alias("gwp")
+        .join(
+            df_member_cc_array.alias("mcc"),
+            (F.col("gwp.MEMBER_BID") == F.col("mcc.MEMBER_BID")) &
+            (F.col("gwp.MODEL_VERSION") == F.col("mcc.RISK_MODEL_VERSION")) &
+            (F.col("gwp.RISK_YEAR") == F.col("mcc.RISK_YEAR")),
+            "left"
+        )
+        .withColumn(
+            "PARENT_CODE_STR",
+            F.concat(F.lit("CC"), F.lpad(F.col("gwp.PARENT_CODE").cast("string"), 3, "0"))
+        )
+        .withColumn(
+            "PARENT_FOUND",
+            F.array_contains(F.col("mcc.all_cc_codes"), F.col("PARENT_CODE_STR"))
+        )
+        .withColumn(
+            "SUPPRESSION2_YN",
+            F.when(F.col("PARENT_FOUND") == True, "Y").otherwise("N")
+        )
+        .select(
+            F.col("gwp.MEMBER_BID"),
+            F.col("gwp.MODEL_VERSION"),
+            F.col("gwp.RISK_YEAR"),
+            F.col("gwp.CC_CODE"),
+            F.col("SUPPRESSION2_YN")
+        )
+        # Aggregate to ensure one row per gap - if ANY parent found, mark as 'Y'
+        .groupBy("MEMBER_BID", "MODEL_VERSION", "RISK_YEAR", "CC_CODE")
+        .agg(
+            F.max(F.when(F.col("SUPPRESSION2_YN") == "Y", "Y").otherwise("N")).alias("SUPPRESSION2_YN")
+        )
+    )
+    
+    # =========================
+    # STEP 6: Join SUPPRESSION2_YN back to original df_final_gap
+    # =========================
+    # Get columns from df_final_gap excluding SUPPRESSION2_YN if it already exists
+    gap_columns = [c for c in df_final_gap.columns if c != 'SUPPRESSION2_YN']
+    
+    df_result = (
+        df_final_gap.alias("gap")
+        .join(
+            suppression2_flags.alias("s2"),
+            (F.col("gap.MEMBER_BID") == F.col("s2.MEMBER_BID")) &
+            (F.col("gap.MODEL_VERSION") == F.col("s2.MODEL_VERSION")) &
+            (F.col("gap.RISK_YEAR") == F.col("s2.RISK_YEAR")) &
+            (F.col("gap.CC_CODE") == F.col("s2.CC_CODE")),
+            "left"
+        )
+        .select(
+            *[F.col(f"gap.{c}") for c in gap_columns],
+            F.coalesce(F.col("s2.SUPPRESSION2_YN"), F.lit("N")).alias("SUPPRESSION2_YN")
+        )
+    )
+    
+    # Reorder columns: insert SUPPRESSION2_YN after SUPPRESSED_BY_PARENT
+    if 'SUPPRESSED_BY_PARENT' in gap_columns:
+        idx = gap_columns.index('SUPPRESSED_BY_PARENT')
+        new_cols = gap_columns[:idx+1] + ['SUPPRESSION2_YN'] + [c for c in gap_columns[idx+1:]]
+    else:
+        new_cols = gap_columns + ['SUPPRESSION2_YN']
+    
+    df_result = df_result.select(*new_cols)
+    
+    return df_result
+
+# ============================================================================
+# METADATA & REFERENCE DATA FUNCTIONS
+# ============================================================================
+
+def get_method_metadata_df(spark, catalog: str, ma_reference: str, ref_table_name: str) -> DataFrame:
+    """
+    Retrieve method metadata from reference tables.
+    
+    Args:
+        spark: SparkSession instance
+        catalog: Catalog name
+        ma_reference: Reference schema name
+        ref_table_name: Reference table name to query
+    
+    Returns:
+        DataFrame containing method metadata
+    """
+    df_method_metadata = spark.table(f"{catalog}.{ma_reference}.{ref_table_name}")
+    return df_method_metadata
+
+def get_method_wise_inclusion(spark, df_method_metadata, method_id) -> DataFrame:
+    """
+    Filter method metadata for inclusion logic (no exclusions).
+    
+    Retrieves method metadata for specified METHOD_ID where:
+    - PROGRAM = 'CMS'
+    - EXCLUSION_TYPE_1 = 'NA' (no exclusion rules)
+    
+    Args:
+        spark: SparkSession instance
+        df_method_metadata: Source method metadata DataFrame
+        method_id: Method ID to filter (1, 2, or 10)
+    
+    Returns:
+        DataFrame filtered to inclusion-only method metadata
+    """
+    df_method_metadata_inclusion = (
+        df_method_metadata
+        .filter(
+            (col("METHOD_ID") == method_id) &
+            (col("PROGRAM") == "CMS") &
+            (col("EXCLUSION_TYPE_1") == "NA")
+        )
+        .select("*")
+    )
+    return df_method_metadata_inclusion
+
+def get_method_metadata_inclusion_10(spark, catalog: str, ma_reference: str, df_method_metadata: DataFrame) -> DataFrame:
+    """
+    Filter method metadata for METHOD_ID 10 inclusion logic.
+    
+    Retrieves method metadata specifically for METHOD_ID 10 where:
+    - PROGRAM = 'CMS'
+    - EXCLUSION_TYPE_1 = 'NA' (no exclusion rules)
+    - Used for procedure-based gap suspecting
+    
+    Args:
+        spark: SparkSession instance
+        catalog: Catalog name
+        ma_reference: Reference schema name
+        df_method_metadata: Source method metadata DataFrame
+    
+    Returns:
+        DataFrame filtered to METHOD_ID 10 inclusion metadata
+    """
+    df_method_metadata_inclusion = (
+        df_method_metadata
+        .filter(
+            (col("METHOD_ID") == 10) &
+            (col("PROGRAM") == "CMS") &
+            (col("EXCLUSION_TYPE_1") == "NA")
+        )
+        .select("*")
+    )
+    return df_method_metadata_inclusion
+
+def join_method_icd_hcc(df_method_metadata_inclusion: DataFrame, df_hcc_main: DataFrame ) -> DataFrame:
+    """
+    Join method metadata with ICD-HCC mapping.
+    
+    Joins method metadata containing diagnosis codes with the ICD-HCC reference
+    to get HCC category mappings.
+    
+    Args:
+        df_method_metadata_inclusion: Method metadata with claim codes
+        df_hcc_main: ICD-HCC mapping reference data
+    
+    Returns:
+        DataFrame with method metadata enriched with HCC mappings
+    """
+    return (
+        df_method_metadata_inclusion
+        .join(
+            df_hcc_main,
+            ((col("CLAIM_CD_TYPE") == 'DIAGNOSIS') & 
+             (col("CLAIM_CD") == col("diagnosiscode"))),
+            "inner"
+        )
+        .select(
+            # col("METHOD_ID"),
+            # col("CLAIM_CD_TYPE"),
+            # col("CLAIM_CD"),
+            # col("CC_ID"),
+            col("*")
+        )
+    )
+
+# ============================================================================
+# CLAIMS DATA RETRIEVAL FUNCTIONS
+# ============================================================================
+
+def get_medical_professional_all(spark, catalog: str, schema: str, risk_year: int, no_of_year: int) -> DataFrame:
+    """
+    Retrieve all professional (physician) claims with diagnoses.
+    
+    Fetches professional claims joined with diagnosis codes for the specified
+    time period. Includes claims with qualified visit indicators.
+    
+    Args:
+        catalog: Catalog name
+        schema: Schema name
+        risk_year: Target risk year
+        no_of_year: Number of years to include (1=current year, 2=current+prior)
+    
+    Returns:
+        DataFrame with professional claims and associated diagnoses
+        
+    Note:
+        - Filters to p.risk_year >= {start_year} and CLM_TP_CD = 3 (professional)
+        - Joins medical_claims with professional_diag
+    """
+    # Convert parameters to integers
+    risk_year = int(risk_year)
+    no_of_year = int(no_of_year)
+    start_year = risk_year - no_of_year + 1
+    
+    return spark.sql(f"""
+        SELECT DISTINCT 
+            p.CLAIM_BID,
+            p.MEMBER_BID,
+            p.CLM_PMT_STS_CD,        
+            p.CLM_TP_CD,        
+            p.TP_OF_BILL_CD,
+            p.LAST_SERV_DT as CLAIM_DT,
+            p.ALLWD_AMT,
+            p.SOURCE_LOAD_MONTH,
+            p.CLM_LN_NUM,
+            p.CPT_AND_HCPCS_CD,
+            pd.DIAG_TYPE_CD,
+            pd.DIAG_NUM,
+            pd.DIAG_CD,
+            '' as PRINC_PROC_CD,
+            p.QUALIFY_CLAIMS,
+            p.INVALID_CPT_HCPCS,
+            p.HOME_PLAN_ID_CD
+        FROM {catalog}.{schema}.medical_claims p 
+        INNER JOIN {catalog}.{schema}.professional_diag pd 
+            ON p.CLAIM_BID = pd.PROFESSIONAL_BID
+        WHERE p.risk_year between  {start_year} and {risk_year}
+            AND p.CLM_TP_CD = 3 
+    """)
+
+
+def get_medical_facility_all(spark, catalog: str, schema: str, risk_year: int, no_of_year: int) -> DataFrame:
+    """
+    Retrieve all facility (institutional) claims with diagnoses.
+    
+    Fetches facility claims joined with diagnosis codes and procedure codes
+    for the specified time period.
+    
+    Args:
+        catalog: Catalog name
+        schema: Schema name
+        risk_year: Target risk year
+        no_of_year: Number of years to include (1=current year, 2=current+prior)
+    
+    Returns:
+        DataFrame with facility claims and associated diagnoses/procedures
+        
+    Note:
+        - Filters to CLM_TP_CD in (1,2) (facility)
+        - Joins medical_claims with facility_diag and facility_header
+    """
+    # Convert parameters to integers
+    risk_year = int(risk_year)
+    no_of_year = int(no_of_year)
+    start_year = risk_year - no_of_year + 1
+    
+    return spark.sql(f"""
+        SELECT DISTINCT 
+            m.CLAIM_BID,
+            m.MEMBER_BID,
+            m.CLM_PMT_STS_CD,        
+            m.CLM_TP_CD,        
+            m.TP_OF_BILL_CD,
+            m.STMT_THRU_DT as CLAIM_DT,
+            m.ALLWD_AMT,
+            m.SOURCE_LOAD_MONTH,
+            m.CLM_LN_NUM,
+            m.CPT_AND_HCPCS_CD,
+            fd.DIAG_TYPE_CD,
+            fd.DIAG_NUM,
+            fd.DIAG_CD,
+            fh.PRINC_PROC_CD,
+            m.QUALIFY_CLAIMS,
+            m.INVALID_CPT_HCPCS,
+            m.HOME_PLAN_ID_CD
+        FROM {catalog}.{schema}.medical_claims m 
+        INNER JOIN {catalog}.{schema}.facility_diag fd
+            ON m.CLAIM_BID = fd.FACILITY_BID
+        INNER JOIN {catalog}.{schema}.facility_header fh
+            ON m.CLAIM_BID = fh.FACILITY_BID
+            AND fd.FACILITY_BID = fh.FACILITY_BID
+        WHERE m.risk_year between {start_year} and {risk_year}
+            AND m.CLM_TP_CD IN (1,2)
+    """)
+
+def get_pharmacy_df(spark, catalog: str, schema: str, risk_year: int, no_of_year: int) -> DataFrame:
+    """
+    Retrieve pharmacy/prescription claims.
+    
+    Fetches pharmacy claims for the specified time period used in
+    Method 1 gap suspecting (NDC-based gaps).
+    
+    Args:
+        catalog: Catalog name
+        schema: Schema name
+        risk_year: Target risk year
+        no_of_year: Number of years to include (1=current year, 2=current+prior)
+    
+    Returns:
+        DataFrame with pharmacy claims
+        
+    Note:
+        - Filter for only valid MEMBER_BID
+        - Service date year used for time filtering
+    """
+    # Convert parameters to integers
+    risk_year = int(risk_year)
+    no_of_year = int(no_of_year)
+    start_year = risk_year - no_of_year + 1
+    
+    query = f"""
+        SELECT * 
+        FROM {catalog}.{schema}.pharmacy 
+        WHERE year(SERV_DT) between {start_year} and {risk_year}
+            AND MEMBER_BID > 0
+    """
+    return spark.sql(query)
+
+# ============================================================================
+# REFERENCE MAPPING FUNCTIONS
+# ============================================================================
+
+def get_cc_code_mapping(spark, catalog: str, ma_reference: str) -> DataFrame:
+    """
+    Get CC_ID to CC_CODE mapping from reference data.
+    
+    Maps condition category IDs to their corresponding codes and descriptions
+    for specific model versions.
+    
+    Args:
+        catalog: Catalog name
+        ma_reference: Reference schema name
+    
+    Returns:
+        DataFrame with CC mappings (SAS_MODEL_YEAR, SAS_MODEL_VERSION, CC_ID, CC_CODE, CC_DESCRIPTION)
+        
+    Note:
+        Filters to model versions: 'MA V2425.86.P1', 'MA V2825.115.T1'
+    """
+    query = f"""
+        SELECT DISTINCT 
+            SAS_MODEL_YEAR, 
+            SAS_MODEL_VERSION, 
+            CC_ID, 
+            CC_CODE, 
+            CC_DESCRIPTION,
+            CHRONIC,
+            CASE WHEN CHRONIC = 1 THEN 'Y' ELSE 'N' END AS CHRONIC_HCC
+        FROM {catalog}.{ma_reference}.ref_chronic_condition 
+        WHERE SAS_MODEL_VERSION IN ('MA V2425.86.P1', 'MA V2825.115.T1','MA E2424.86.T1','MA R0824.84.T1') 
+    """
+    return spark.sql(query)
+
+def join_method_metadata_with_cc_code( df_method_metadata_inclusion: DataFrame, df_cc_code_mapping: DataFrame ) -> DataFrame:
+    """
+    Enrich method metadata with CC code details.
+    
+    Joins method metadata with CC code mapping to add model version,
+    year, CC code, and description information.
+    
+    Args:
+        df_method_metadata_inclusion: Method metadata DataFrame
+        df_cc_code_mapping: CC code mapping reference
+    
+    Returns:
+        DataFrame with method metadata enriched with CC code details
+    """
+    return (
+        df_method_metadata_inclusion.join(
+            df_cc_code_mapping,
+            df_method_metadata_inclusion["cc_id"] == df_cc_code_mapping["cc_id"],
+            "inner"
+        )
+        .select(
+            df_method_metadata_inclusion["*"],
+            df_cc_code_mapping["SAS_MODEL_VERSION"],
+            df_cc_code_mapping["SAS_MODEL_YEAR"],
+            df_cc_code_mapping["CC_CODE"],
+            df_cc_code_mapping["CC_DESCRIPTION"],
+            df_cc_code_mapping["CHRONIC_HCC"]
+        )
+        .distinct()
+    )
+
+# ============================================================================
+# GAP CREATION FUNCTIONS - METHOD-SPECIFIC
+# ============================================================================
+
+def create_draft_gap_M1(df_method_metadata_with_cc_code: DataFrame, df_pharmacy: DataFrame) -> DataFrame:
+    """
+    Create draft gaps for Method 1 (Pharmacy/NDC-based gaps).
+    
+    Identifies potential gaps by matching pharmacy NDC codes with method metadata.
+    Method 1 focuses on prescription drug-based gap identification.
+    
+    Args:
+        df_method_metadata_with_cc_code: Method metadata with CC code mappings
+        df_pharmacy: Pharmacy claims data
+    
+    Returns:
+        DataFrame with draft gaps identified from pharmacy claims
+        
+    Gap Logic:
+        - Matches NDC codes from pharmacy claims with CLAIM_CD in metadata
+        - All matched pharmacy claims are flagged as "Create Gap"
+        - Assigns CLM_TP_CD = 4 (pharmacy claim type)
+    """
+    return (
+        df_method_metadata_with_cc_code.alias("inc")
+        .join(
+            df_pharmacy.alias("RX_claim"),
+            (
+                (col("inc.CLAIM_CD_TYPE") == "NDC") & 
+                (col("inc.CLAIM_CD") == col("RX_claim.PROD_SERV_ID_CD"))
+            ),
+            "inner"
+        )
+        .select(
+            # Method metadata columns
+            col("inc.METHOD_ID"),
+            col("inc.CLAIM_CD_TYPE"),
+            col("inc.CLAIM_CD"),
+            col("inc.CC_ID"),
+            col("inc.PERCENT_WEIGHT"),
+            col("inc.CC_CODE"),
+            col("inc.CC_DESCRIPTION"),
+            col("inc.CHRONIC_HCC"),                       
+            col("inc.SAS_MODEL_YEAR"),
+            col("inc.SAS_MODEL_VERSION"),
+            col("inc.CLAIM_CD_MODIFIER"), 
+            col("inc.CLAIM_CD_MODIFIER_TYPE"),
+            col("inc.EXCLUSION_1"),
+            col("inc.EXCLUSION_2"), 
+            col("inc.EXCLUSION_TYPE_1"), 
+            col("inc.EXCLUSION_TYPE_2"),
+            col("inc.QUALIFIED_CLAIM"),
+            # Pharmacy claim details
+            year(col("RX_claim.serv_dt")).alias("RISK_YEAR"),
+            col("RX_claim.PHARMACY_BID").alias("CLAIM_BID"),
+            col("RX_claim.MEMBER_BID"),
+            col("RX_claim.CLM_PMT_STS_CD"),
+            lit("4").alias("CLM_TP_CD"),  # Pharmacy claim type
+            lit("").alias("TP_OF_BILL_CD"),
+            col("RX_claim.SERV_DT").alias("CLAIM_DT"),
+            col("RX_claim.ALLWD_AMT"),
+            col("RX_claim.SOURCE_LOAD_MONTH"),
+            col("RX_claim.CLM_LN_NUM"),
+            # Empty fields for medical claim columns
+            lit("").alias("CPT_AND_HCPCS_CD"),
+            lit("").alias("DIAG_TYPE_CD"),
+            lit("").alias("DIAG_NUM"),
+            lit("").alias("DIAG_CD"),
+            lit("").alias("PRINC_PROC_CD"),
+            lit("").alias("QUALIFY_CLAIMS"),
+            lit("").alias("INVALID_CPT_HCPCS"),
+            # Gap status fields
+            lit("NA").alias("CODE"),
+            lit("Inclusion - Suspecting Diagnosis").alias("GAP_REASON"), 
+            lit("Create Gap").alias("GAP_STATUS"), 
+            lit("NA").alias("MATCHED_CODE"), 
+            lit("").alias("MATCHED_DATE"),
+            lit("Inclusion Logic").alias("SCENARIO_TYPE"),
+            col("RX_claim.HOME_PLAN_ID_CD").alias("HOME_PLAN_ID_CD")
+        )
+        .distinct()
+    )
+
+def create_draft_gap_M2(df_method_metadata_with_cc_code: DataFrame, df_final_medical_claims_all: DataFrame ) -> DataFrame:
+    """
+    Create draft gaps for Method 2 (Diagnosis/Procedure-based gaps).
+    
+    Identifies potential gaps by matching diagnosis codes, CPT-HCPCS codes,
+    or ICD procedure codes from medical claims with method metadata.
+    Applies qualified claim logic.
+    
+    Args:
+        df_method_metadata_with_cc_code: Method metadata with CC code mappings
+        df_final_medical_claims_all: Combined facility and professional claims
+    
+    Returns:
+        DataFrame with draft gaps identified from medical claims
+        
+    Gap Logic:
+        - Matches DIAGNOSIS, CPT-HCPCS, or ICD-PROC codes
+        - If QUALIFIED_CLAIM = 0: All matches flagged as "Create Gap"
+        - If QUALIFIED_CLAIM = 1: Only qualified claims (QUALIFY_CLAIMS='Y') flagged as "Create Gap"
+        - Others marked as "DO NOT Create Gap"
+    """
+    return (
+        df_method_metadata_with_cc_code.alias("inc")
+        .join(
+            df_final_medical_claims_all.alias("all_claim"),
+            (
+                # Match diagnosis codes
+                (
+                    (col("inc.CLAIM_CD_TYPE") == "DIAGNOSIS") & 
+                    (col("inc.CLAIM_CD") == col("all_claim.DIAG_CD"))
+                ) |
+                # Match CPT-HCPCS codes
+                (
+                    (col("inc.CLAIM_CD_TYPE") == "CPT-HCPCS") & 
+                    (col("inc.CLAIM_CD") == col("all_claim.CPT_AND_HCPCS_CD"))
+                ) |
+                # Match ICD procedure codes
+                (
+                    (col("inc.CLAIM_CD_TYPE") == "ICD-PROC") & 
+                    (col("inc.CLAIM_CD") == col("all_claim.PRINC_PROC_CD"))
+                )
+            ),
+            "inner"
+        )
+        .select(
+            col("inc.METHOD_ID"),
+            col("inc.CLAIM_CD_TYPE"),
+            col("inc.CLAIM_CD"),
+            col("inc.CC_ID"),
+            col("inc.PERCENT_WEIGHT"),
+            col("inc.CC_CODE"),
+            col("inc.CC_DESCRIPTION"),
+            col("inc.CHRONIC_HCC"),                       
+            col("inc.SAS_MODEL_YEAR"),
+            col("inc.SAS_MODEL_VERSION"),
+            col("inc.CLAIM_CD_MODIFIER"), 
+            col("inc.CLAIM_CD_MODIFIER_TYPE"),
+            col("inc.EXCLUSION_1"),
+            col("inc.EXCLUSION_2"), 
+            col("inc.EXCLUSION_TYPE_1"), 
+            col("inc.EXCLUSION_TYPE_2"),
+            col("inc.QUALIFIED_CLAIM"),
+            year(col("all_claim.claim_dt")).alias("RISK_YEAR"),
+            col("all_claim.*"),
+            lit("NA").alias("CODE"),
+            when(
+                (col("inc.QUALIFIED_CLAIM") == 0),
+                lit("Inclusion - Suspecting Diagnosis")
+            ).when(
+                (col("inc.QUALIFIED_CLAIM") == 1) & (col("all_claim.QUALIFY_CLAIMS") == "Y"),
+                lit("Inclusion - Suspecting Diagnosis")
+            ).otherwise(
+                lit("Inclusion - Claim is not qualified")
+            ).alias("GAP_REASON"),
+            when(
+                (col("inc.QUALIFIED_CLAIM") == 0),
+                lit("Create Gap")
+            ).when(
+                (col("inc.QUALIFIED_CLAIM") == 1) & (col("all_claim.QUALIFY_CLAIMS") == "Y"),
+                lit("Create Gap")
+            ).otherwise(
+                lit("DO NOT Create Gap")
+            ).alias("GAP_STATUS"),
+            lit("NA").alias("MATCHED_CODE"), 
+            lit("").alias("MATCHED_DATE"),
+            lit("Inclusion Logic").alias("SCENARIO_TYPE")
+        )
+    )
+
+#df_draft_gap_M2_10_Qualified
+def create_draft_gap_M_10( df_method_metadata_with_cc_code: DataFrame, df_final_medical_claims_all: DataFrame) -> DataFrame:
+    """
+    Create draft gaps for Method 10 (Procedure-based gaps with qualified claims).
+    
+    Similar to Method 2 but specifically for Method 10, identifies potential gaps by matching
+    CPT-HCPCS codes or ICD procedure codes from medical claims with method metadata.
+    Applies qualified claim logic.
+    
+    Args:
+        df_method_metadata_with_cc_code: Method metadata with CC code mappings
+        df_final_medical_claims_all: Combined facility and professional claims
+    
+    Returns:
+        DataFrame with draft gaps identified from medical procedure claims
+        
+    Gap Logic:
+        - Matches CPT-HCPCS or ICD-PROC codes only (no diagnosis codes)
+        - If QUALIFIED_CLAIM = 0: All matches flagged as "Create Gap"
+        - If QUALIFIED_CLAIM = 1: Only qualified claims (QUALIFY_CLAIMS='Y') flagged as "Create Gap"
+        - Others marked as "DO NOT Create Gap"
+        - Used for procedure-based gap suspecting logic
+    """
+    return (
+        df_method_metadata_with_cc_code.alias("inc")
+        .join(
+            df_final_medical_claims_all.alias("all_claim"),
+            (
+                (
+                    (col("inc.CLAIM_CD_TYPE") == "CPT-HCPCS") & 
+                    (col("inc.CLAIM_CD") == col("all_claim.CPT_AND_HCPCS_CD"))
+                ) |
+                (
+                    (col("inc.CLAIM_CD_TYPE") == "ICD-PROC") & 
+                    (col("inc.CLAIM_CD") == col("all_claim.PRINC_PROC_CD"))
+                )
+            ),
+            "inner"
+        )
+        .select(
+            col("inc.METHOD_ID"),
+            col("inc.CLAIM_CD_TYPE"),
+            col("inc.CLAIM_CD"),
+            col("inc.CC_ID"),
+            col("inc.PERCENT_WEIGHT"),
+            col("inc.CC_CODE"),
+            col("inc.CC_DESCRIPTION"),
+            col("inc.CHRONIC_HCC"),                       
+            col("inc.SAS_MODEL_YEAR"),
+            col("inc.SAS_MODEL_VERSION"),
+            col("inc.CLAIM_CD_MODIFIER"), 
+            col("inc.CLAIM_CD_MODIFIER_TYPE"),
+            col("inc.EXCLUSION_1"),
+            col("inc.EXCLUSION_2"), 
+            col("inc.EXCLUSION_TYPE_1"), 
+            col("inc.EXCLUSION_TYPE_2"),
+            col("inc.QUALIFIED_CLAIM"),
+            year(col("all_claim.claim_dt")).alias("RISK_YEAR"),
+            col("all_claim.*"),
+            lit("NA").alias("CODE"),
+            when(
+                (col("inc.QUALIFIED_CLAIM") == 0),
+                lit("Inclusion - Suspecting Diagnosis")
+            ).when(
+                (col("inc.QUALIFIED_CLAIM") == 1) & (col("all_claim.QUALIFY_CLAIMS") == "Y"),
+                lit("Inclusion - Suspecting Diagnosis")
+            ).otherwise(
+                lit("Inclusion - Claim is not qualified")
+            ).alias("GAP_REASON"),
+            when(
+                (col("inc.QUALIFIED_CLAIM") == 0),
+                lit("Create Gap")
+            ).when(
+                (col("inc.QUALIFIED_CLAIM") == 1) & (col("all_claim.QUALIFY_CLAIMS") == "Y"),
+                lit("Create Gap")
+            ).otherwise(
+                lit("DO NOT Create Gap")
+            ).alias("GAP_STATUS"),
+            lit("NA").alias("MATCHED_CODE"), 
+            lit("").alias("MATCHED_DATE"),
+            lit("Inclusion Logic").alias("SCENARIO_TYPE")
+        ).distinct()
+    )
+#Base, Multi-Step Gap Suspecting with Exclusions - applicable for only method 10
+def load_method_exclusions_10(df_ref_method_metadata: DataFrame ) -> DataFrame:
+    """
+    Load exclusion metadata for Method 10 gap suspecting.
+    
+    Filters method metadata to retrieve only exclusion rules for Method 10.
+    Used in multi-step gap suspecting logic with exclusion scenarios.
+    
+    Args:
+        df_ref_method_metadata: Full method metadata DataFrame
+    
+    Returns:
+        DataFrame containing Method 10 exclusion metadata where:
+        - PROGRAM = 'CMS'
+        - METHOD_ID = 10
+        - EXCLUSION_TYPE_1 != 'NA' (has exclusion rules defined)
+        
+    Note:
+        Despite tuple return type hint, this function returns a DataFrame.
+        Only applicable for Method 10 procedure-based gap suspecting.
+    """
+    df_exclusions = df_ref_method_metadata.filter(
+        (col("PROGRAM") == "CMS") & 
+        (col("METHOD_ID").isin([10])) & 
+        (col("EXCLUSION_TYPE_1") != "NA")
+    ).select("*")
+    return df_exclusions
+
+def get_scenario1_gap_claims_optimized( df_method_exclusions: DataFrame,df_final_medical_claims_all: DataFrame,    df_ref_method_metadata_codegroups: DataFrame ) -> DataFrame:
+    """
+    Optimized Scenario 1 gap identification with modifier and exclusion logic.
+    
+    Performance optimizations:
+    - Early filtering to reduce data volume
+    - Broadcast joins for small reference tables
+    - Strategic caching to avoid recomputation
+    - Array operations to replace expensive self-joins
+    - Single LEFT join for exclusion checking
+    """
+    
+    # OPTIMIZATION 1: Filter and broadcast metadata (small table)
+    df_scenario1_metadata = broadcast(
+        df_method_exclusions.filter(
+            (col("PROGRAM") == "CMS") & 
+            (col("METHOD_ID").isin(10)) &
+            (col("EXCLUSION_TYPE_1") != "NA") & 
+            (col("CLAIM_CD_MODIFIER_TYPE") != "NA")
+        )
+    )
+    # OPTIMIZATION 2: Early filtering - reduce claims to last 2 years with valid CPT codes
+    df_claims_filtered = df_final_medical_claims_all.filter(
+        # (col("CLAIM_DT") >= add_months(current_date(), -24)) &
+        (col("CPT_AND_HCPCS_CD").isNotNull())
+    )
+
+    # S1: Find claims matching CPT-HCPCS codes (use filtered claims)
+    df_s1_claims = df_claims_filtered.join(
+        df_scenario1_metadata,
+        (df_scenario1_metadata["CLAIM_CD_TYPE"] == "CPT-HCPCS") & 
+        (df_scenario1_metadata["CLAIM_CD"] == df_claims_filtered["CPT_AND_HCPCS_CD"]),
+        "inner"
+    ).select(
+        df_claims_filtered["*"],
+        df_scenario1_metadata["METHOD_ID"],
+        df_scenario1_metadata["CLAIM_CD_TYPE"],
+        df_scenario1_metadata["CLAIM_CD"],
+        df_scenario1_metadata["CC_ID"],
+        df_scenario1_metadata["CLAIM_CD_MODIFIER_TYPE"],
+        df_scenario1_metadata["CLAIM_CD_MODIFIER"],
+        df_scenario1_metadata["EXCLUSION_TYPE_1"],
+        df_scenario1_metadata["EXCLUSION_1"],
+        df_scenario1_metadata["EXCLUSION_TYPE_2"],
+        df_scenario1_metadata["EXCLUSION_2"],
+        df_scenario1_metadata["PERCENT_WEIGHT"],
+        df_scenario1_metadata["QUALIFIED_CLAIM"]
+    ).cache()  # OPTIMIZATION 3: Cache S1 (reused in S2 and final result)
+
+    # OPTIMIZATION 4: Get relevant members only for downstream filtering
+    relevant_members = broadcast(
+        df_s1_claims.select("MEMBER_BID").distinct()
+    )
+    
+    # OPTIMIZATION 5: Filter claims to relevant members only
+    df_claims_relevant = df_claims_filtered.join(
+        relevant_members, "MEMBER_BID", "inner"
+    )
+
+    # S2: Optimized modifier check using array operations instead of self-join
+    df_s1_claims_distinct = df_s1_claims.select(
+        'CPT_AND_HCPCS_CD', 'CLAIM_CD', 
+        'CLAIM_CD_MODIFIER_TYPE', 'CLAIM_CD_MODIFIER'
+    ).distinct()
+
+    # OPTIMIZATION 6: Broadcast modifier code expansion (small table)
+    df_modifier_codes = broadcast(
+        df_ref_method_metadata_codegroups.join(
+            df_s1_claims_distinct,
+            (df_ref_method_metadata_codegroups["CLAIM_CD_TYPE"] == df_s1_claims_distinct["CLAIM_CD_MODIFIER_TYPE"]) &
+            (df_ref_method_metadata_codegroups["CLAIM_CD"] == df_s1_claims_distinct["CLAIM_CD_MODIFIER"]),
+            "inner"
+        ).select(
+            df_ref_method_metadata_codegroups["CODE"],
+            df_s1_claims_distinct['CPT_AND_HCPCS_CD'], 
+            df_s1_claims_distinct['CLAIM_CD'], 
+            df_s1_claims_distinct['CLAIM_CD_MODIFIER_TYPE'], 
+            df_s1_claims_distinct['CLAIM_CD_MODIFIER']
+        )
+    )
+    
+    # OPTIMIZATION 7: Aggregate procedures at claim level (replaces expensive self-join)
+    df_claim_procedures = df_claims_relevant.groupBy(
+        "CLAIM_BID", "CLM_TP_CD", "MEMBER_BID"
+    ).agg(
+        collect_set("CPT_AND_HCPCS_CD").alias("ALL_PROCEDURES")
+    )
+    
+    # OPTIMIZATION 8: Group modifier codes by requirement for array intersection
+    df_modifier_sets = df_modifier_codes.groupBy(
+        'CPT_AND_HCPCS_CD', 'CLAIM_CD', 
+        'CLAIM_CD_MODIFIER_TYPE', 'CLAIM_CD_MODIFIER'
+    ).agg(
+        collect_set("CODE").alias("REQUIRED_MODIFIERS")
+    )
+
+    # OPTIMIZATION 9: Use array_intersect instead of join (in-memory operation)
+    df_s2_claims = df_s1_claims.alias("s1").join(
+        df_claim_procedures,
+        ["CLAIM_BID", "CLM_TP_CD", "MEMBER_BID"],
+        "inner"
+    ).join(
+        broadcast(df_modifier_sets),
+        ['CPT_AND_HCPCS_CD', 'CLAIM_CD', 'CLAIM_CD_MODIFIER_TYPE', 'CLAIM_CD_MODIFIER'],
+        "inner"
+    ).filter(
+        # Check if ANY modifier from the required set exists in the claim
+        size(array_intersect(col("ALL_PROCEDURES"), col("REQUIRED_MODIFIERS"))) > 0
+    ).withColumn(
+        # Get the first matched modifier code
+        "CODE", array_intersect(col("ALL_PROCEDURES"), col("REQUIRED_MODIFIERS"))[0]
+    ).select(
+        col("CODE"),
+        col("s1.CLAIM_BID"),
+        col("s1.MEMBER_BID"),
+        col("s1.CLM_PMT_STS_CD"),
+        col("s1.CLM_TP_CD"),
+        col("s1.TP_OF_BILL_CD"),
+        col("s1.CLAIM_DT"),
+        col("s1.ALLWD_AMT"),
+        col("s1.SOURCE_LOAD_MONTH"),
+        col("s1.CLM_LN_NUM"),
+        col("s1.CPT_AND_HCPCS_CD"),
+        col("s1.DIAG_TYPE_CD"),
+        col("s1.DIAG_NUM"),
+        col("s1.DIAG_CD"),
+        col("s1.PRINC_PROC_CD"),
+        col("s1.QUALIFY_CLAIMS"),
+        col("s1.INVALID_CPT_HCPCS"),
+        col("s1.METHOD_ID"),
+        col("s1.CLAIM_CD_TYPE"),
+        col("s1.CLAIM_CD"),
+        col("s1.CC_ID"),
+        col("s1.CLAIM_CD_MODIFIER_TYPE"),
+        col("s1.CLAIM_CD_MODIFIER"),
+        col("s1.EXCLUSION_TYPE_1"),
+        col("s1.EXCLUSION_1"),
+        col("s1.EXCLUSION_TYPE_2"),
+        year(col("s1.CLAIM_DT")).alias("RISK_YEAR"),
+        col("s1.EXCLUSION_2"),
+        col("s1.PERCENT_WEIGHT"),
+        col("s1.QUALIFIED_CLAIM"),
+        col("s1.HOME_PLAN_ID_CD"),
+        lit("Exclusion logic").alias("SCENARIO_TYPE")
+    ).drop("ALL_PROCEDURES", "REQUIRED_MODIFIERS") \
+     .distinct() \
+     .cache()  # OPTIMIZATION 10: Cache S2 (reused in S3)
+
+    # S3: Optimized exclusion check with pre-filtered history
+    # OPTIMIZATION 11: Broadcast exclusion code expansion (small table)
+    df_exclusion_codes = broadcast(
+        df_ref_method_metadata_codegroups.join(
+            df_s2_claims.select("EXCLUSION_TYPE_1", "EXCLUSION_1", "EXCLUSION_TYPE_2", "EXCLUSION_2").distinct(),
+            ((df_ref_method_metadata_codegroups["CLAIM_CD_TYPE"] == col("EXCLUSION_TYPE_1")) &
+             (df_ref_method_metadata_codegroups["CLAIM_CD"] == col("EXCLUSION_1"))) |
+            ((df_ref_method_metadata_codegroups["CLAIM_CD_TYPE"] == col("EXCLUSION_TYPE_2")) &
+             (df_ref_method_metadata_codegroups["CLAIM_CD"] == col("EXCLUSION_2"))),
+            "inner"
+        ).select("CODE", "EXCLUSION_TYPE_1", "EXCLUSION_1", "EXCLUSION_TYPE_2", "EXCLUSION_2").distinct()
+    )
+    
+    # OPTIMIZATION 12: Pre-filter exclusion history (only exclusion codes, only relevant members)
+    df_exclusion_history = df_claims_relevant.join(
+        df_exclusion_codes.select("CODE").distinct(),
+        col("DIAG_CD") == col("CODE"),
+        "inner"
+    ).select(
+        col("MEMBER_BID").alias("HIST_MEMBER_BID"),
+        col("CLAIM_DT").alias("HIST_CLAIM_DT"),
+        col("DIAG_CD").alias("HIST_DIAG_CD")
+    ).distinct()
+
+    # OPTIMIZATION 13: Single LEFT join instead of inner join + separate left join
+    # This keeps all S2 records and marks those with exclusions
+    df_s2_with_lookback = df_s2_claims.withColumn(
+        "LOOKBACK_START", date_sub(col("CLAIM_DT"), 180)
+    )
+    
+    df_final_scenario1 = df_s2_with_lookback.join(
+        df_exclusion_history,
+        (df_s2_with_lookback["MEMBER_BID"] == col("HIST_MEMBER_BID")) &
+        (col("HIST_CLAIM_DT") >= col("LOOKBACK_START")) &
+        (col("HIST_CLAIM_DT") <= df_s2_with_lookback["CLAIM_DT"]),
+        "left"  # LEFT join keeps all S2 records
+    ).select(
+        df_s2_with_lookback["*"],
+        col("HIST_DIAG_CD").alias("MATCHED_CODE"),
+        col("HIST_CLAIM_DT").alias("MATCHED_DATE"),
+        # Set GAP_STATUS and GAP_REASON in single pass
+        when(col("HIST_DIAG_CD").isNotNull(), lit("Found Exclusion in 180 days with modifier"))
+            .otherwise(lit("No Exclusion in 180 days")).alias("GAP_REASON"),
+        when(col("HIST_DIAG_CD").isNotNull(), lit("DO NOT Create Gap"))
+            .otherwise(lit("Create Gap")).alias("GAP_STATUS")
+    ).drop("LOOKBACK_START", "HIST_MEMBER_BID") \
+     .distinct()
+    
+    # OPTIMIZATION 14: Clean up cached DataFrames to free memory
+    df_s1_claims.unpersist()
+    df_s2_claims.unpersist()
+    
+    return df_final_scenario1
+
+#lastest_Scenario2 with matched details and without Claim Code Modifier, Complete S1-S2 Gap Logic
+def process_scenario2(df_method_exclusions: DataFrame, df_final_medical_claims_all: DataFrame,     df_ref_method_metadata_codegroups: DataFrame) -> DataFrame:
+    """
+    Process Scenario 2 exclusion logic for gaps WITHOUT claim code modifiers.
+    
+    Implements S1-S2 gap logic for procedures that do not require specific modifiers.
+    Identifies potential gaps and checks for exclusion diagnoses in the last 180 days.
+    
+    Args:
+        df_ref_method_metadata: Method metadata reference data
+        df_final_medical_claims_all: Combined facility and professional claims
+        df_ref_method_metadata_codegroups: Code group expansions (ICD groups, procedure groups)
+    
+    Returns:
+        DataFrame with Scenario 2 gaps including:
+        - GAP_STATUS: "Create Gap" or "DO NOT Create Gap"
+        - GAP_REASON: "Found Exclusion in 180 days" or "No Exclusion in 180 days"
+        - MATCHED_CODE: Exclusion diagnosis code if found
+        - MATCHED_DATE: Date of exclusion diagnosis if found
+        
+    Gap Logic (S1-S2):
+        S1: Match CPT-HCPCS codes from claims to method metadata where:
+            - CLAIM_CD_MODIFIER_TYPE = 'NA' (no modifier required)
+            - EXCLUSION_TYPE_1 != 'NA' (has exclusion rules)
+            
+        S2: Check for exclusion diagnoses in last 180 days:
+            - Expand exclusion codes using code groups
+            - Search historical claims for exclusion diagnoses
+            - Flag gaps with exclusions as "DO NOT Create Gap"
+            
+    Note:
+        Complementary to Scenario 1 which handles cases WITH modifiers.
+        Used for Methods 1, 2, and 10.
+    """
+    # Step 1: Get method metadata with CLAIM_CD_MODIFIER = 'NA'
+    df_scenario2_metadata = df_method_exclusions.filter(
+        (col("PROGRAM") == "CMS") & 
+        (col("METHOD_ID").isin(10)) &
+        (col("EXCLUSION_TYPE_1") != "NA") & 
+        (col("CLAIM_CD_MODIFIER_TYPE") == "NA")
+    )
+
+    # S1: Find claims matching CPT-HCPCS codes
+    df_s1_claims_scenario2 = df_final_medical_claims_all.alias("claims").join(
+        df_scenario2_metadata.alias("meta"),
+        (col("meta.CLAIM_CD_TYPE") == "CPT-HCPCS") & 
+        (col("meta.CLAIM_CD") == col("claims.CPT_AND_HCPCS_CD")),
+        "inner"
+    ).select(
+        col("claims.*"),
+        year(col("claims.CLAIM_DT")).alias("RISK_YEAR"),
+        col("meta.METHOD_ID"),
+        col("meta.CC_ID"),
+        col("meta.CLAIM_CD_TYPE"),
+        col("meta.CLAIM_CD"),
+        col("meta.CLAIM_CD_MODIFIER_TYPE"),
+        col("meta.CLAIM_CD_MODIFIER"),
+        col("meta.PERCENT_WEIGHT"),
+        col("meta.QUALIFIED_CLAIM"),
+        col("meta.EXCLUSION_TYPE_1"),
+        col("meta.EXCLUSION_1"),
+        col("meta.EXCLUSION_TYPE_2"),
+        col("meta.EXCLUSION_2"),
+        lit("Exclusion logic").alias("SCENARIO_TYPE")
+    ).distinct()
+
+    # S2: Get exclusion Diagnosis codes from method_metadata_group
+    df_exclusion_codes_scenario2 = df_ref_method_metadata_codegroups.alias("codegroups").join(
+        df_s1_claims_scenario2.select(
+            "MEMBER_BID", "EXCLUSION_TYPE_1", "EXCLUSION_1", "EXCLUSION_TYPE_2", "EXCLUSION_2"
+        ).distinct().alias("excl"),
+        (((col("codegroups.CLAIM_CD_TYPE") == col("excl.EXCLUSION_TYPE_1")) &
+         (col("codegroups.CLAIM_CD") == col("excl.EXCLUSION_1"))) |
+        ((col("codegroups.CLAIM_CD_TYPE") == col("excl.EXCLUSION_TYPE_2")) &
+         (col("codegroups.CLAIM_CD") == col("excl.EXCLUSION_2")))),
+        "inner"
+    ).select(
+        col("excl.MEMBER_BID"), 
+        col("codegroups.CODE"), 
+        col("excl.EXCLUSION_TYPE_1"), 
+        col("excl.EXCLUSION_1"), 
+        col("excl.EXCLUSION_TYPE_2"), 
+        col("excl.EXCLUSION_2")
+    ).distinct()
+    # S3: Find exclusion diagnosis in last 180 days
+    df_s2_exclusions_scenario2 = df_s1_claims_scenario2.alias("s1").join(
+        df_final_medical_claims_all.alias("hist").select(
+            col("hist.MEMBER_BID").alias("HIST_MEMBER_BID"),
+            col("hist.CLAIM_DT").alias("HIST_CLAIM_DT"),
+            col("hist.DIAG_CD").alias("HIST_DIAG_CD")
+        ),
+        (col("s1.MEMBER_BID") == col("HIST_MEMBER_BID")) &
+        (datediff(col("s1.CLAIM_DT"), col("HIST_CLAIM_DT")) >= 0) &
+        (datediff(col("s1.CLAIM_DT"), col("HIST_CLAIM_DT")) <= 180),
+        "inner"
+    ).join(
+        df_exclusion_codes_scenario2.alias("excl_codes"),
+        (col("HIST_DIAG_CD") == col("excl_codes.CODE")) &
+        (col("HIST_MEMBER_BID") == col("excl_codes.MEMBER_BID")),
+        "inner"
+    ).select(
+        col("s1.*"),
+        col("excl_codes.CODE"),
+        col("HIST_DIAG_CD").alias("MATCHED_CODE"),
+        col("HIST_CLAIM_DT").alias("MATCHED_DATE")
+    ).distinct()
+
+    # Mark records based on exclusion presence
+    df_s2_with_flag_scenario2 = df_s2_exclusions_scenario2.select(
+        "CLAIM_BID", "MEMBER_BID", "CLM_TP_CD", "CLAIM_DT", "CPT_AND_HCPCS_CD", "CODE",
+        "METHOD_ID", "CC_ID", "MATCHED_CODE", "MATCHED_DATE"
+    ).distinct().withColumn("EXCLUSION_FLAG", lit(1))
+
+    # Left join to mark which records had exclusions
+    df_final_scenario2 = df_s1_claims_scenario2.alias("s1_all").join(
+        df_s2_with_flag_scenario2.alias("s2_flagged"),
+        (col("s1_all.CLAIM_BID") == col("s2_flagged.CLAIM_BID")) &
+        (col("s1_all.MEMBER_BID") == col("s2_flagged.MEMBER_BID")) &
+        (col("s1_all.CLM_TP_CD") == col("s2_flagged.CLM_TP_CD")) &
+        (col("s1_all.CLAIM_DT") == col("s2_flagged.CLAIM_DT")) &
+        (col("s1_all.CPT_AND_HCPCS_CD") == col("s2_flagged.CPT_AND_HCPCS_CD")) &
+        (col("s1_all.METHOD_ID") == col("s2_flagged.METHOD_ID")) &
+        (col("s1_all.CC_ID") == col("s2_flagged.CC_ID")),
+        "left"
+    ).select(
+        col("s1_all.*"),
+        col("s2_flagged.CODE"),
+        col("s2_flagged.MATCHED_CODE"),
+        col("s2_flagged.MATCHED_DATE"),
+        col("s2_flagged.EXCLUSION_FLAG"),
+        when(col("s2_flagged.EXCLUSION_FLAG") == 1, lit("Found Exclusion in 180 days without modifier"))
+            .otherwise(lit("No Exclusion in 180 days")).alias("GAP_REASON"),
+        when(col("s2_flagged.EXCLUSION_FLAG") == 1, lit("DO NOT Create Gap"))
+            .otherwise(lit("Create Gap")).alias("GAP_STATUS")
+    )
+
+    # Final summary DataFrame
+    # df_final_scenario2_summary = df_final_scenario2.select(
+    #     "CLAIM_BID", "MEMBER_BID", "CLAIM_DT", "CLM_TP_CD", "CPT_AND_HCPCS_CD", "CODE",
+    #     "METHOD_ID", "CC_ID", "MATCHED_CODE", "MATCHED_DATE", "SCENARIO_TYPE", 
+    #     "GAP_REASON", "GAP_STATUS"
+    # ).distinct()
+
+    return df_final_scenario2
+
+#df_member_cc_with_BID Risk Member HCCs
+def read_risk_member_output(spark, catalog, schema_curation, time_period_list, ma_schema, source_load_year_month):
+    query_rmo = f"""
+        SELECT rmo.RISK_MEMBER_ID as MEMBER_BID, 
+               rmo.HOME_PLAN_ID_CD, 
+               rmo.RISK_MODEL_VERSION,
+               rmo.YEAR_MONTH, 
+               rmo.DIAG_CD_TO_HCC_JSON_LIST ,
+               YEAR(tp.BEGIN_DATE) as RISK_YEAR,
+               rmo.RISK_MODEL_TYPE,
+               rmo.RISK_MODEL_SEGMENT,
+               rmo.MEMBER_GENDER,
+               rmo.MEMBER_AGE,
+               rmo.SAS_MODEL_VERSION,
+               rmo.CYCLE_RUN_DATE
+        FROM {catalog}.{schema_curation}.risk_member_output rmo
+        INNER JOIN 
+        {catalog}.{ma_schema}.time_periods as tp
+        on rmo.TIME_PERIOD = tp.TIME_PERIOD AND tp.TIME_PERIOD_TYPE_CD='C'
+        WHERE rmo.TIME_PERIOD IN ({time_period_list})
+        AND rmo.YEAR_MONTH = '{source_load_year_month}'
+    """
+    df_rmo = spark.sql(query_rmo)
+    return df_rmo 
+
+def generate_member_cc_with_BID(spark, df_member_cc_with_BID: DataFrame) -> DataFrame:
+    """
+    Generate member CC (Condition Category) codes from risk member output.
+    
+    Retrieves risk member HCC data and extracts up to 30 CC codes per member
+    from JSON arrays. Creates CC_Code1 through CC_Code30 columns with formatted
+    CC codes (e.g., "CC001", "CC019", "CC085").
+    
+    Args:
+        spark: SparkSession instance
+        catalog: Catalog name
+        schema_curation: Curated schema name
+        time_period_list: Comma-separated list of time periods to filter
+    
+    Returns:
+        DataFrame with columns:
+        - MEMBER_BID: Member business ID
+        - HOME_PLAN_ID_CD: Plan identifier
+        - RISK_MODEL_YEAR: Risk model year
+        - RISK_MODEL_VERSION: Model version (v24/v28)
+        - YEAR_MONTH: Year-month identifier
+        - CC_Code1 through CC_Code30: Formatted CC codes ("CC###")
+        
+    CC Code Extraction:
+        - Extracts from DIAG_CD_TO_HCC_JSON_LIST array
+        - Supports both V24 and V28 model categories
+        - Formats as "CC" + zero-padded 3-digit number
+        - NULL if position doesn't exist or no valid code
+        
+    Note:
+        Used for matching gaps against member's existing HCC conditions
+        to determine if gap already exists (MATCHING_YN flag).
+    """
+    for i in range(100):
+        cc_col_name = f"CC_Code{i+1}"
+        df_member_cc_with_BID = df_member_cc_with_BID.withColumn(
+            cc_col_name,
+            when(
+                size(col("DIAG_CD_TO_HCC_JSON_LIST")) > i,
+                when(
+                    length(regexp_extract(col("DIAG_CD_TO_HCC_JSON_LIST")[i], r"(?i)'cms-hcc-model-category-v28':(\d+)", 1)) > 0,
+                    concat(lit("CC"), lpad(regexp_extract(col("DIAG_CD_TO_HCC_JSON_LIST")[i], r"(?i)'cms-hcc-model-category-v28':(\d+)", 1), 3, "0"))
+                ).when(
+                    length(regexp_extract(col("DIAG_CD_TO_HCC_JSON_LIST")[i], r"(?i)'cms-hcc-model-category-v24':(\d+)", 1)) > 0,
+                    concat(lit("CC"), lpad(regexp_extract(col("DIAG_CD_TO_HCC_JSON_LIST")[i], r"(?i)'cms-hcc-model-category-v24':(\d+)", 1), 3, "0"))
+                ).otherwise(
+                    lit("")
+                )
+            ).otherwise(lit(None).cast(StringType()))
+        )
+    return df_member_cc_with_BID
+
+# Added model version in join condition
+def join_gap_with_member_cc_optimized(df_draft_gap_with_version, df_member_cc_with_BID):
+    # Unpivot CC codes — alias RISK_MODEL_VERSION → MODEL_VERSION
+    df_member_cc_unpivoted = df_member_cc_with_BID.select(
+        "MEMBER_BID",
+        col("RISK_MODEL_VERSION").alias("MODEL_VERSION"),
+        "RISK_YEAR",
+        "HOME_PLAN_ID_CD",
+        explode(array([col(f"CC_Code{i}") for i in range(1, 101)])).alias("CC_CODE")
+    ).filter(col("CC_CODE").isNotNull()) \
+     .withColumn("_MATCHED", lit(True))  # sentinel to detect successful join
+
+    # Left join — _MATCHED will be null when no CC match found
+    return df_draft_gap_with_version.join(
+        df_member_cc_unpivoted,
+        ["MEMBER_BID", "RISK_YEAR", "CC_CODE", "MODEL_VERSION"],
+        "left"
+    ).withColumn(
+        "MATCHING_YN",
+        when(col("_MATCHED").isNotNull(), "Y").otherwise("N")
+    ).drop("_MATCHED") \
+     .select(df_draft_gap_with_version["*"], "MATCHING_YN") \
+     .distinct()
+
+#hierarchy_config
+def get_ref_hierarchy(spark, catalog: str, ma_reference: str) -> DataFrame:
+    """
+    Retrieve HCC hierarchy configuration from reference data.
+    
+    Fetches parent-child relationships for Hierarchical Condition Categories (HCC)
+    used in suppression logic. When a parent HCC exists, child HCCs are suppressed
+    according to CMS risk adjustment rules.
+    
+    Args:
+        spark: SparkSession instance
+        catalog: Catalog name
+        ma_reference: Reference schema name
+    
+    Returns:
+        DataFrame with columns:
+        - version: Model version (e.g., 'v24', 'v28')
+        - parent: Parent HCC code (integer)
+        - child: Comma-separated child HCC codes (string)
+        - model: Model type (filtered to 'cms_hcc')
+        
+    Ordered by: version, parent
+        
+    Usage:
+        Used in two_level_suppression_logic_final() to:
+        1. Identify which child HCCs should be suppressed when parent exists
+        2. Apply CMS hierarchy rules to prevent double-counting
+        3. Generate SUPPRESSION1_YN and SUPPRESSION2_YN flags
+        
+    Example:
+        Parent HCC 85 suppresses children 86, 87, 88
+        If member has HCC 85, then HCC 86/87/88 are suppressed
+    """
+    query = f"""
+        SELECT version, parent, child, model 
+        FROM {catalog}.{ma_reference}.hierarchy_config 
+        WHERE model = 'cms_hcc' 
+        ORDER BY version, parent
+    """
+    return spark.sql(query)
+
+
+def combine_gap_with_version_suppression(df_final_gap: DataFrame, df_final_gap_with_suppression: DataFrame ) -> DataFrame:
+    """
+    Drops 'CC_CODE' from df_final_gap and joins with df_final_gap_with_suppression
+    on MEMBER_BID, MODEL_VERSION, and RISK_YEAR. Returns the combined DataFrame.
+    """
+    # df_final_gap_clean = df_final_gap.drop("CC_CODE")
+    df_gap_with_version_suppression = df_final_gap.alias("gap").join(
+        df_final_gap_with_suppression.alias("supp"),
+        (F.col("gap.MEMBER_BID") == F.col("supp.MEMBER_BID")) &
+        (F.col("gap.MODEL_VERSION") == F.col("supp.MODEL_VERSION")) &
+        (F.col("gap.RISK_YEAR") == F.col("supp.RISK_YEAR")) &
+        (F.col("gap.CC_CODE") == F.col("supp.CC_CODE")),
+        "left_outer"
+    ).select(
+        *[F.col(f"gap.{c}") for c in df_final_gap.columns],
+        *[F.col(f"supp.{c}").alias(f"{c}") 
+          for c in df_final_gap_with_suppression.columns 
+          if c not in ["MEMBER_BID", "MODEL_VERSION", "RISK_YEAR", "CC_CODE"]]
+    ).distinct()
+    
+    return df_gap_with_version_suppression
+
+def add_create_gap_status_column(df: DataFrame) -> DataFrame:
+    """
+    Filters the DataFrame to only include rows where:
+    MATCHING_YN = 'N', SUPPRESSION1_YN = 'N', and SUPPRESSION2_YN = 'N'.
+    
+    For these filtered rows, sets GAP_STATUS to 'Open Suspect' and adds CREATE_GAP = 'Y'.
+    """
+    
+    return df.filter(
+        (F.col("MATCHING_YN") == "N") & 
+        (F.coalesce(F.col("SUPPRESSION1_YN"), F.lit("N")) == "N") & 
+        (F.coalesce(F.col("SUPPRESSION2_YN"), F.lit("N")) == "N")
+    ).withColumn(
+        "CREATE_GAP", F.lit("Y")
+    ).withColumn(
+        "GAP_STATUS", F.lit("Open Suspect")
+    )
+    
+def load_risk_member_and_reference_data(spark, catalog, schema, schema_curation, ma_reference, df_member_output):
+    """
+    Load the latest risk member output data and reference tables.
+    
+    Args:
+        spark (SparkSession): Active Spark session
+        catalog (str): Catalog name
+        schema (str): Schema name for medical claims
+        schema_curation (str): Schema name for curated tables
+        ma_reference (str): Schema name for reference tables
+    
+    Returns:
+        dict: Dictionary containing the following DataFrames:
+            - 'risk_member_output_df': Latest risk member output data
+            - 'coefficient_scores_df': coefficient_scores reference data
+            - 'adjustment_factors_df': adjustment_factors reference data
+            - 'latest_year_month': Latest YEAR_MONTH value
+            - 'latest_cycle': Latest CYCLE_RUN_DATE value (overall max)
+    
+    Raises:
+        ValueError: If required tables don't exist or no data is found
+        Exception: For any other unexpected errors during execution
+    """
+    
+    try:
+        # ========================================================================
+        # Phase 1: Load Latest Risk Member Output Data
+        # For the latest YEAR_MONTH, retrieves the latest CYCLE_RUN_DATE per SAS_MODEL_VERSION
+        # ========================================================================
+
+        # risk_member_table = f"{catalog}.{schema_curation}.risk_member_output"
+        # logging.info(f"Source table: {risk_member_table}")
+
+        # # Validate table exists
+        # try:
+        #     if not spark.catalog.tableExists(risk_member_table):
+        #         raise ValueError(f"Table {risk_member_table} does not exist")
+        # except Exception as e:
+        #     logging.error(f"Error checking table existence for {risk_member_table}: {str(e)}")
+        #     raise Exception(f"Failed checking table existence for {risk_member_table}: {str(e)}")
+
+        # Step 1: Get the latest YEAR_MONTH (minimal scan)
+        try:
+            logging.info("Step 1: Getting latest YEAR_MONTH")
+            latest_year_month_row = (
+                # spark.table(risk_member_table)
+                    df_member_output
+                    .select("YEAR_MONTH")
+                    .distinct()
+                    .agg(spark_max("YEAR_MONTH").alias("max_ym"))
+                    .first()
+            )
+            
+            if latest_year_month_row is None or latest_year_month_row["max_ym"] is None:
+                raise ValueError(f"No data found in {df_member_output}")
+                
+            latest_year_month = latest_year_month_row["max_ym"]
+            logging.info(f"Latest YEAR_MONTH identified: {latest_year_month}")
+            
+        except Exception as e:
+            logging.error(f"Error getting latest YEAR_MONTH: {str(e)}")
+            raise Exception(f"Failed getting latest YEAR_MONTH: {str(e)}")
+
+        # Step 2: Read only the latest YEAR_MONTH partition
+        try:
+            logging.info("Step 2: Filtering data for latest YEAR_MONTH")
+            df_latest_month = (
+                # spark.table(risk_member_table)
+                df_member_output
+                    .filter(col("YEAR_MONTH") == latest_year_month)
+            )
+            
+            if not df_latest_month.head(1):
+                raise ValueError(f"No records found for YEAR_MONTH {latest_year_month}")
+                
+            logging.info(f"Data found for YEAR_MONTH {latest_year_month}")
+            
+        except Exception as e:
+            logging.error(f"Error filtering data for YEAR_MONTH {latest_year_month}: {str(e)}")
+            raise Exception(f"Failed filtering data for YEAR_MONTH {latest_year_month}: {str(e)}")
+
+        # Step 3: Compute latest cycle per SAS_MODEL_VERSION
+        try:
+            logging.info("Step 3: Getting latest CYCLE_RUN_DATE per SAS_MODEL_VERSION")
+            max_cycle_per_version = (
+                df_latest_month
+                .groupBy("SAS_MODEL_VERSION")
+                .agg(spark_max("CYCLE_RUN_DATE").alias("MAX_CYCLE_RUN_DATE"))
+            )
+                
+        except Exception as e:
+            logging.error(f"Error computing latest cycle per version: {str(e)}")
+            raise Exception(f"Failed computing latest cycle per version: {str(e)}")
+
+        # Step 4: Keep rows that match each version's latest cycle
+        try:
+            logging.info("Step 4: Filtering rows for each version's latest cycle within latest YEAR_MONTH")
+            risk_member_output_df = (
+                df_latest_month.alias("rm")
+                .join(
+                    max_cycle_per_version.alias("mx"),
+                    (col("rm.SAS_MODEL_VERSION") == col("mx.SAS_MODEL_VERSION")) &
+                    (col("rm.CYCLE_RUN_DATE") == col("mx.MAX_CYCLE_RUN_DATE")),
+                    "inner"
+                )
+                .select("rm.*")  # Select only original columns, exclude MAX_CYCLE_RUN_DATE
+            )
+            
+            # Final validation
+            if not risk_member_output_df.head(1):
+                raise ValueError("No rows matched latest cycle per version")
+            
+            logging.info(
+                f"Final data loaded for YEAR_MONTH {latest_year_month} "
+            )
+            
+        except Exception as e:
+            logging.error(f"Error applying per-version cycle filter: {str(e)}")
+            raise Exception(f"Failed applying per-version cycle filter: {str(e)}")
+
+        # Step 5: Compute overall latest cycle for return value
+        try:
+            logging.info("Step 5: Computing overall latest CYCLE_RUN_DATE")
+            latest_cycle_row = (
+                risk_member_output_df
+                .select(spark_max("CYCLE_RUN_DATE").alias("max_cycle"))
+                .first()
+            )
+            latest_cycle = latest_cycle_row["max_cycle"] if latest_cycle_row else None
+            logging.info(f"Overall latest CYCLE_RUN_DATE: {latest_cycle}")
+            
+        except Exception as e:
+            logging.error(f"Error computing overall latest cycle: {str(e)}")
+            raise Exception(f"Failed computing overall latest cycle: {str(e)}")
+            
+        # ========================================================================
+        # Phase 2: Load Transform and Reference Tables
+        # ========================================================================
+        logging.info("-" * 80)
+        logging.info("Phase 2: Loading Transform and Reference Tables")
+        logging.info("-" * 80)
+
+        # Load coefficient scores reference data
+        try:
+            coefficient_scores_table = f"{catalog}.{ma_reference}.coefficient_scores"
+            logging.info(f"Loading table: {coefficient_scores_table}")
+            if not spark.catalog.tableExists(coefficient_scores_table):
+                raise ValueError(f"Required table {coefficient_scores_table} does not exist")
+            
+            coefficient_scores_df = spark.table(coefficient_scores_table)
+            logging.info(f"Successfully loaded {coefficient_scores_table}")
+            
+            if not coefficient_scores_df.head(1):
+                logging.warning(f"Table {coefficient_scores_table} is empty")
+        except Exception as e:
+            logging.error(f"Error loading {coefficient_scores_table}: {str(e)}")
+            raise Exception(f"Failed to load {coefficient_scores_table}: {str(e)}")
+            
+        # Load adjustment_factors reference data
+        try:
+            adjustment_factors_table = f"{catalog}.{ma_reference}.adjustment_factors"
+            logging.info(f"Loading table: {adjustment_factors_table}")
+            if not spark.catalog.tableExists(adjustment_factors_table):
+                raise ValueError(f"Required table {adjustment_factors_table} does not exist")
+            
+            adjustment_factors_df = spark.table(adjustment_factors_table)
+            logging.info(f"Successfully loaded {adjustment_factors_table}")
+            
+            if not adjustment_factors_df.head(1):
+                logging.warning(f"Table {adjustment_factors_table} is empty")
+        except Exception as e:
+            logging.error(f"Error loading {adjustment_factors_table}: {str(e)}")
+            raise Exception(f"Failed to load {adjustment_factors_table}: {str(e)}")
+        
+        logging.info("All reference tables loaded successfully")
+        
+        # Return all loaded data
+        return {
+            'risk_member_output_df': risk_member_output_df,
+            'coefficient_scores_df': coefficient_scores_df,
+            'adjustment_factors_df': adjustment_factors_df,
+            'latest_year_month': latest_year_month,
+            'latest_cycle': latest_cycle
+        }
+    
+    except ValueError as ve:
+        logging.error(f"Validation error: {str(ve)}")
+        raise
+    except Exception as e:
+        logging.error(f"Unexpected error in load_risk_member_and_reference_data: {str(e)}")
+        raise Exception(f"Failed in load_risk_member_and_reference_data: {str(e)}")
+
+#####################################################################################
+def insert_risk_member_hcc_from_gaps(
+    spark,
+    catalog: str,
+    curated_schema: str,
+    df_suspected_gaps_all: DataFrame,
+    load_risk_member_and_scores_df: dict,
+    risk_model_year: int,
+    no_of_year: int,
+    method_id,  # can be int OR list[int]; if DF has METHOD_ID, we’ll filter by these
+    audit_metadata: dict,
+    threshold_percent: float
+) -> DataFrame:
+    """
+    Inserts into curated risk_member_hcc by:
+      Step 1: Computing METHOD_CONFIDENCE_FACTOR = MAX(CONFIDENCE_FACTOR) at method level per key
+      Step 2: Applying threshold to METHOD_CONFIDENCE_FACTOR and including all requested methods
+      Step 3: Computing COMBINED_CONFIDENCE_FACTOR across methods and persisting both new columns (DECIMAL(5,4)).
+    """
+
+    # ---------------------------
+    # Normalize inputs & guards
+    # ---------------------------
+    risk_model_year = int(risk_model_year)
+
+    # Support both int and list-like method_id inputs
+    if isinstance(method_id, (list, tuple, set)):
+        method_ids = [int(m) for m in method_id]
+    else:
+        method_ids = [int(method_id)]
+    # Ensure CHRONIC_HCC exists (may not exist for Method 4 data)
+    if "CHRONIC_HCC" not in df_suspected_gaps_all.columns:
+        df_suspected_gaps_all = df_suspected_gaps_all.withColumn("CHRONIC_HCC", F.lit(None).cast("string"))
+    
+    # Default CHRONIC_HCC to 'Y' for Method 4 if null (persistent HCCs are chronic by definition)
+    df_suspected_gaps_all = df_suspected_gaps_all.withColumn(
+        "CHRONIC_HCC",
+        F.when((F.col("METHOD_ID") == 4) & F.col("CHRONIC_HCC").isNull(), F.lit("Y"))
+         .otherwise(F.col("CHRONIC_HCC"))
+    )
+    # ----------------------------------------------------------------------
+    # Step 1: Compute METHOD_CONFIDENCE_FACTOR (MAX per group at method-level)
+    # ----------------------------------------------------------------------
+    logging.info(f"Started Compute METHOD_CONFIDENCE_FACTOR--->")
+    # If DF contains METHOD_ID, we can filter to include just the requested methods.
+    df = df_suspected_gaps_all
+
+    # has_method_id_col = "METHOD_ID" in df.columns
+
+    # if has_method_id_col:
+    #     df = df.filter(F.col("METHOD_ID").isin(method_ids))
+
+    # Build the grouping keys. If METHOD_ID column exists, include it so the
+    # method-level confidence is truly per method.
+    group_keys = ["RISK_YEAR", "MODEL_VERSION", "MEMBER_BID", "CC_CODE","METHOD_ID"]
+    # Aggregate to method-level rows; carry forward first/representative values
+    # for descriptive columns that will be needed downstream.
+    # NOTE: We use IGNORENULLS where supported to avoid null dominance.
+    df_suspected_gaps_method_confidence = (
+        df.groupBy(*group_keys)
+          .agg(
+              F.max("CONFIDENCE_FACTOR").alias("METHOD_CONFIDENCE_FACTOR"),
+              F.first("CC_DESCRIPTION", ignorenulls=True).alias("CC_DESCRIPTION"),
+              F.first("SUPPRESSION1_YN", ignorenulls=True).alias("SUPPRESSION1_YN"),
+              F.first("SUPPRESSION2_YN", ignorenulls=True).alias("SUPPRESSION2_YN"),
+              F.first("SAS_MODEL_VERSION", ignorenulls=True).alias("SAS_MODEL_VERSION"),
+              F.first("HOME_PLAN_ID_CD", ignorenulls=True).alias("HOME_PLAN_ID_CD"),
+              F.first("SOURCE_LOAD_MONTH", ignorenulls=True).alias("SOURCE_LOAD_MONTH"),
+              F.first("CLM_TP_CD", ignorenulls=True).alias("CLM_TP_CD"),
+              F.first("CLAIM_BID", ignorenulls=True).alias("CLAIM_BID"),
+              F.first("CLAIM_DT", ignorenulls=True).alias("CLAIM_DT"),
+              F.first("DIAG_CD", ignorenulls=True).alias("DIAG_CD"),
+              F.first("CHRONIC_HCC", ignorenulls=True).alias("CHRONIC_HCC"),
+              F.first("CLAIM_CD_TYPE", ignorenulls=True).alias("CLAIM_CD_TYPE"),
+              F.first("CLAIM_CD", ignorenulls=True).alias("CLAIM_CD"),
+              F.first("PERCENT_WEIGHT", ignorenulls=True).alias("PERCENT_WEIGHT"),
+              F.first("SAS_MODEL_YEAR", ignorenulls=True).alias("SAS_MODEL_YEAR"),
+              F.first("CLAIM_CD_MODIFIER", ignorenulls=True).alias("CLAIM_CD_MODIFIER"),
+              F.first("CLAIM_CD_MODIFIER_TYPE", ignorenulls=True).alias("CLAIM_CD_MODIFIER_TYPE"),
+              F.first("EXCLUSION_1", ignorenulls=True).alias("EXCLUSION_1"),
+              F.first("EXCLUSION_2", ignorenulls=True).alias("EXCLUSION_2"),
+              F.first("EXCLUSION_TYPE_1", ignorenulls=True).alias("EXCLUSION_TYPE_1"),
+              F.first("EXCLUSION_TYPE_2", ignorenulls=True).alias("EXCLUSION_TYPE_2"),
+              F.first("QUALIFIED_CLAIM", ignorenulls=True).alias("QUALIFIED_CLAIM"),
+              F.first("CLM_PMT_STS_CD", ignorenulls=True).alias("CLM_PMT_STS_CD"),
+              F.first("TP_OF_BILL_CD", ignorenulls=True).alias("TP_OF_BILL_CD"),
+              F.first("ALLWD_AMT", ignorenulls=True).alias("ALLWD_AMT"),
+              F.first("CLM_LN_NUM", ignorenulls=True).alias("CLM_LN_NUM"),
+              F.first("CPT_AND_HCPCS_CD", ignorenulls=True).alias("CPT_AND_HCPCS_CD"),
+              F.first("DIAG_TYPE_CD", ignorenulls=True).alias("DIAG_TYPE_CD"),
+              F.first("DIAG_NUM", ignorenulls=True).alias("DIAG_NUM"),
+              F.first("PRINC_PROC_CD", ignorenulls=True).alias("PRINC_PROC_CD"),
+              F.first("QUALIFY_CLAIMS", ignorenulls=True).alias("QUALIFY_CLAIMS"),
+              F.first("INVALID_CPT_HCPCS", ignorenulls=True).alias("INVALID_CPT_HCPCS"),
+              F.first("CODE", ignorenulls=True).alias("CODE"),
+              F.first("GAP_REASON", ignorenulls=True).alias("GAP_REASON"),
+              F.first("GAP_STATUS", ignorenulls=True).alias("GAP_STATUS"),
+              F.first("MATCHED_CODE", ignorenulls=True).alias("MATCHED_CODE"),
+              F.first("MATCHED_DATE", ignorenulls=True).alias("MATCHED_DATE"),
+              F.first("SCENARIO_TYPE", ignorenulls=True).alias("SCENARIO_TYPE"),
+              F.first("MATCHING_YN", ignorenulls=True).alias("MATCHING_YN"),
+              F.first("SUPPRESSED_BY_PARENT", ignorenulls=True).alias("SUPPRESSED_BY_PARENT"),
+              F.first("FREQUENCY", ignorenulls=True).alias("FREQUENCY"),
+              F.first("CC_ID", ignorenulls=True).alias("CC_ID")
+          )
+    )
+    logging.info(f"Completed Compute METHOD_CONFIDENCE_FACTOR--->")
+    # -------------------------------------------------------------
+    # Step 2: Enriching with 2 fields - CLAIM_TYPE and DX_SOURCE
+    # -------------------------------------------------------------
+    # Threshold filtering is now based on METHOD_CONFIDENCE_FACTOR (NOT row-level confidence)
+    logging.info(f"Started Enriching with 2 fields - CLAIM_TYPE and DX_SOURCE--->")
+    base_df = (
+        df_suspected_gaps_method_confidence
+        .withColumn("CLM_TP_CD_STR", F.col("CLM_TP_CD").cast("string"))
+        .withColumn(
+            "CLAIM_TYPE",
+            F.when(F.col("CLM_TP_CD_STR") == "1", F.lit("facility-inpatient"))
+             .when(F.col("CLM_TP_CD_STR") == "2", F.lit("facility-outpatient"))
+             .when(F.col("CLM_TP_CD_STR") == "3", F.lit("professional"))
+             .when(F.col("CLM_TP_CD_STR") == "4", F.lit("pharmacy"))
+             .otherwise(F.lit(None).cast("string"))
+        )
+        .withColumn("DX_SOURCE", F.lit("suspected_gap"))
+        # Normalize to 'YYYY-MM' for target CYCLE_RUN VARCHAR(7)
+        .withColumn("CYCLE_RUN_NORM", F.substring(F.col("SOURCE_LOAD_MONTH"), 1, 7))
+    )
+    logging.info(f"Completed Enriching with 2 fields - CLAIM_TYPE and DX_SOURCE--->")
+    # -------------------------------------------------------------------------------------
+    # Join to risk_member_output_df to fetch member attributes and risk segment/type/version
+    # -------------------------------------------------------------------------------------
+    logging.info(f"Started Joining to risk_member_output_df to fetch member attributes and risk segment/type/version")
+    rmo_df = load_risk_member_and_scores_df['risk_member_output_df']
+
+    risk_member_base_df = (
+        base_df.alias("base")
+        .join(
+            rmo_df.alias("rmo"),
+            on=(
+                (F.trim(F.col("base.HOME_PLAN_ID_CD")) == F.trim(F.col("rmo.HOME_PLAN_ID_CD"))) &
+                (F.upper(F.trim(F.col("base.SAS_MODEL_VERSION"))) == F.upper(F.trim(F.col("rmo.SAS_MODEL_VERSION")))) &
+                (F.upper(F.trim(F.col("base.MODEL_VERSION").cast("string"))) == F.upper(F.trim(F.col("rmo.RISK_MODEL_VERSION")))) &
+                (F.col("base.MEMBER_BID") == F.col("rmo.MEMBER_BID")) &
+                (F.col("base.RISK_YEAR") == F.col("rmo.RISK_YEAR"))
+            ),
+            how="left"
+        )
+        .select(
+            F.col("base.*"),
+            F.col("rmo.RISK_MODEL_TYPE"),
+            F.col("rmo.RISK_MODEL_SEGMENT"),
+            F.col("rmo.MEMBER_GENDER"),
+            F.col("rmo.MEMBER_AGE"),
+            F.col("rmo.SAS_MODEL_VERSION").alias("RMO_SAS_MODEL_VERSION")  # for debug if needed
+        )
+    )
+    logging.info(f"Completed Joining to risk_member_output_df to fetch member attributes and risk segment/type/version")
+    # ---------------------------------------------
+    # Get coefficient scores by (model/segment/HCC)
+    # ---------------------------------------------
+    coeff_scores_df = load_risk_member_and_scores_df['coefficient_scores_df']
+    # commented to handle negative CC_ID in below code
+    # risk_member_base_df = (
+    #     risk_member_base_df
+    #     .withColumn("CC_NUM", F.regexp_extract(F.col("CC_CODE"), r'(\d+)$', 1).cast("int"))
+    #     .withColumn(
+    #         "EXPECTED_CC_CODE",
+    #         F.when(
+    #             F.col("CC_NUM").isNotNull() & F.col("RISK_MODEL_SEGMENT").isNotNull(),
+    #             F.concat(F.col("RISK_MODEL_SEGMENT"), F.lit("_HCC"), F.col("CC_NUM").cast("string"))
+    #         )
+    #     )
+    # )
+    logging.info(f"Started Getting coefficient scores by (model/segment/HCC)")
+    risk_member_base_df = (
+        risk_member_base_df
+        # Extract numeric suffix if present
+        .withColumn(
+            "CC_NUM",
+            F.regexp_extract(F.col("CC_CODE"), r'(\d+)$', 1).cast("int")
+        )
+        # Build EXPECTED_CC_CODE
+        .withColumn(
+            "EXPECTED_CC_CODE",
+            F.when(
+                # Case 1: Letter + number CC codes (e.g., CC101)
+                F.col("CC_NUM").isNotNull() & F.col("RISK_MODEL_SEGMENT").isNotNull(),
+                F.concat(
+                    F.col("RISK_MODEL_SEGMENT"),
+                    F.lit("_HCC"),
+                    F.col("CC_NUM").cast("string")
+                )
+            ).when(
+                # Case 2: Letters-only CC codes (e.g., CANCER)
+                F.col("CC_NUM").isNull() & F.col("RISK_MODEL_SEGMENT").isNotNull(),
+                F.concat(
+                    F.col("RISK_MODEL_SEGMENT"),
+                    F.lit("_"),
+                    F.col("CC_CODE")
+                )
+            )
+        )
+    )
+    rmb = (
+        risk_member_base_df
+        .withColumn("RMT_norm", F.upper(F.trim(F.col("RISK_MODEL_TYPE"))))
+        .withColumn("MV_norm",  F.upper(F.trim(F.col("MODEL_VERSION").cast("string"))))
+        .withColumn("ECC_norm", F.upper(F.trim(F.col("EXPECTED_CC_CODE"))))
+    )
+    coef = (
+        coeff_scores_df
+        .withColumn("MODEL_norm",   F.upper(F.trim(F.col("MODEL"))))
+        .withColumn("VERSION_norm", F.upper(F.trim(F.col("VERSION").cast("string"))))
+        .withColumn("NAME_norm",    F.upper(F.trim(F.col("NAME"))))
+    )
+    join_cond = (
+        (rmb["RMT_norm"] == coef["MODEL_norm"]) &
+        (rmb["MV_norm"]  == coef["VERSION_norm"]) &
+        (rmb["ECC_norm"] == coef["NAME_norm"])
+    )
+
+    risk_member_with_scores_df = (
+        rmb
+        .join(coef.select("MODEL_norm", "VERSION_norm", "NAME_norm", "SCORE"), join_cond, how="left")
+        .drop("RMT_norm", "MV_norm", "ECC_norm")
+    )
+    logging.info(f"Completed Getting coefficient scores by (model/segment/HCC)")
+    # ---------------------------------
+    # Normalization/Adjustment factors
+    # ---------------------------------
+    adjustment_factors_df = load_risk_member_and_scores_df['adjustment_factors_df']
+
+    logging.info(f"Started Normalization/Adjustment factors")
+
+    risk_member_with_scores_df_final = (
+        risk_member_with_scores_df.alias("base")
+        .join(
+            adjustment_factors_df.alias("nf"),
+            (F.lower(F.col("base.MODEL_VERSION").cast("string")) == F.lower(F.col("nf.VERSION"))) &
+            (F.lower(F.col("base.RISK_MODEL_TYPE")) == F.lower(F.col("nf.MODEL"))),
+            "left"
+        )
+        .select("base.*", "nf.NORMALIZATION_FACTOR", "nf.CODING_PATTERN_ADJUSTMENT")
+        .withColumn(
+            "ADJ_COEFF_SCORE",
+            round(
+                (col("SCORE") / col("NORMALIZATION_FACTOR")) *
+                (1 - col("CODING_PATTERN_ADJUSTMENT")),
+                3
+            )
+        )
+    )
+
+    logging.info(f"Completed Normalization/Adjustment factors")
+
+    # ----------------------------------------------------------------
+    # Step 3: Compute COMBINED_CONFIDENCE_FACTOR across all methods
+    #        for same (RISK_YEAR, MODEL_VERSION, MEMBER_BID, CC_CODE)
+    # combined = 1 - Π (1 - METHOD_CONFIDENCE_FACTOR)
+    # ----------------------------------------------------------------
+    key_no_method = ["RISK_YEAR", "MODEL_VERSION", "MEMBER_BID", "CC_CODE"]
+
+    logging.info(f"Started Computing COMBINED_CONFIDENCE_FACTOR")
+
+    combined_by_key_df = (
+        base_df
+        .select(*key_no_method, "METHOD_ID", "METHOD_CONFIDENCE_FACTOR")
+        .distinct()
+        .groupBy(*key_no_method)
+        .agg(
+            F.expr(
+                "1 - aggregate(collect_list(1.0 - METHOD_CONFIDENCE_FACTOR), 1.0D, (acc, x) -> acc * x)"
+            ).alias("COMBINED_CONFIDENCE_FACTOR")
+        )
+    )
+    enriched_df = (
+        risk_member_with_scores_df_final.alias("base")
+        .join(
+            combined_by_key_df.alias("cmb"),
+            on=[
+                F.col("base.RISK_YEAR") == F.col("cmb.RISK_YEAR"),
+                F.col("base.MODEL_VERSION") == F.col("cmb.MODEL_VERSION"),
+                F.col("base.MEMBER_BID") == F.col("cmb.MEMBER_BID"),
+                F.col("base.CC_CODE") == F.col("cmb.CC_CODE"),
+            ],
+            how="left"
+        )
+        .select("base.*", "cmb.COMBINED_CONFIDENCE_FACTOR")
+    )
+
+    logging.info(f"Completed Computing COMBINED_CONFIDENCE_FACTOR")
+    # ------------------------------
+    # Prepare final insert DataFrame
+    # ------------------------------
+    # Cast confidence fields to DECIMAL(5,4)
+    enriched_df = (
+        enriched_df
+        .withColumn(
+            "METHOD_CONFIDENCE_FACTOR_D",
+            F.round(F.col("METHOD_CONFIDENCE_FACTOR"), 4).cast(DecimalType(5, 4))
+        )
+        .withColumn(
+            "COMBINED_CONFIDENCE_FACTOR_D",
+            F.round(F.col("COMBINED_CONFIDENCE_FACTOR"), 4).cast(DecimalType(5, 4))
+        )
+    )
+    # Build the select list (align with target schema including new columns)
+    logging.info(f"Started final insert_df for risk_member_hcc table")
+
+    insert_df = (
+        enriched_df.filter(F.col("COMBINED_CONFIDENCE_FACTOR") >= F.lit(threshold_percent))
+        .select(
+            F.col("MEMBER_BID").cast("bigint").alias("MEMBER_BID"),
+            F.col("HOME_PLAN_ID_CD").alias("HOME_PLAN_ID_CD"),
+            F.col("SAS_MODEL_YEAR").alias("RISK_MODEL_YEAR"),
+            F.col("RISK_MODEL_TYPE"),
+            F.substring(F.col("MODEL_VERSION").cast("string"), 1, 10).alias("RISK_MODEL_VERSION"),
+            F.col("RISK_MODEL_SEGMENT"),
+            F.substring(F.col("SAS_MODEL_VERSION").cast("string"), 1, 50).alias("SAS_MODEL_VERSION"),
+            F.col("MEMBER_GENDER"),
+            F.col("MEMBER_AGE"),
+            F.lit("HCC").alias("RISK_TYPE_ID"),
+            F.concat(F.lit("H"), F.col("CC_CODE")).alias("RISK_TYPE_DETAIL_ID"),  # CC_CODE is now uniform "CC###" across all methods
+            F.col("CC_DESCRIPTION").alias("RISK_TYPE_DETAIL_DESC"),
+            F.when(
+                (F.coalesce(F.col("SUPPRESSION1_YN"), F.lit("N")) == "N") &
+                (F.coalesce(F.col("SUPPRESSION2_YN"), F.lit("N")) == "N"),
+                F.lit("R")
+            ).when(
+                (F.coalesce(F.col("SUPPRESSION1_YN"), F.lit("N")) == "Y") |
+                (F.coalesce(F.col("SUPPRESSION2_YN"), F.lit("N")) == "Y"),
+                F.lit("S")
+            ).otherwise(F.lit(None).cast("string")).alias("SUPPRESSION_IND"),
+            F.col("METHOD_ID").cast("int").alias("METHOD_ID"),
+            F.col("ADJ_COEFF_SCORE"),
+            F.col("SCORE").alias("COEFF_SCORE"),
+            # >>> New fields as DECIMAL(5,4)
+            F.col("METHOD_CONFIDENCE_FACTOR_D").alias("METHOD_CONFIDENCE_FACTOR"),
+            F.col("COMBINED_CONFIDENCE_FACTOR_D").alias("COMBINED_CONFIDENCE_FACTOR"),
+            # <<<
+            (F.col("CHRONIC_HCC") if "CHRONIC_HCC" in df_suspected_gaps_all.columns
+                else F.lit(None).cast("string")).alias("CHRONIC_HCC"),
+            F.col("DX_SOURCE").alias("DX_SOURCE"),
+            F.col("GAP_STATUS").cast("string").alias("GAP_STATUS"),  # If needed, set from DF (first) or keep null
+            F.substring(F.col("CLAIM_TYPE").cast("string"), 1, 30).alias("CLAIM_TYPE"),
+            F.col("CLAIM_BID").cast("bigint").alias("CLAIM_BID"),
+            F.col("CLAIM_DT").cast("date").alias("CLAIM_DATE"),
+            F.col("DIAG_CD").cast("string").alias("DIAG_CD"),
+            F.col("RISK_YEAR").cast("int").alias("RISK_YEAR"),
+            F.lit(None).cast("string").alias("HRA"),
+            F.lit(None).cast("string").alias("HOME_HRA"),
+            F.col("CYCLE_RUN_NORM").cast("string").alias("CYCLE_RUN"),
+            F.lit(None).cast("string").alias("ACTIVE_IND"),
+            F.lit(audit_metadata['created_date']).cast("timestamp").alias("CREATED_DATE"),
+            F.lit(audit_metadata['created_by']).alias("CREATED_BY"),
+            F.lit(audit_metadata['updated_date']).cast("timestamp").alias("UPDATED_DATE"),
+            F.lit(audit_metadata['updated_by']).alias("UPDATED_BY"),
+        )
+        .distinct()
+    )
+
+    logging.info(f"Completed final insert_df for risk_member_hcc table")
+
+    # -------------------------
+    # Persist to target table
+    # -------------------------
+    # print(f"Homeplan --070 and member_bid--1100000000238228")
+    # insert_df.filter(F.col("MEMBER_BID") == 1100000000238228).display()
+    
+    insert_df.createOrReplaceTempView("suspected_gaps_insert_view")
+
+    logging.info(f"Started inserting into risk_member_hcc table")
+
+    # IMPORTANT: Ensure the column order matches your table schema, including the two new columns.
+    spark.sql(f"""
+        INSERT INTO {catalog}.{curated_schema}.risk_member_hcc         SELECT             MEMBER_BID,             HOME_PLAN_ID_CD,             RISK_MODEL_YEAR,             RISK_MODEL_TYPE,             RISK_MODEL_VERSION,             RISK_MODEL_SEGMENT,             SAS_MODEL_VERSION,             MEMBER_GENDER,             MEMBER_AGE,             RISK_TYPE_ID,             RISK_TYPE_DETAIL_ID,             RISK_TYPE_DETAIL_DESC,             SUPPRESSION_IND,             METHOD_ID, ADJ_COEFF_SCORE,             COEFF_SCORE,   METHOD_CONFIDENCE_FACTOR,   COMBINED_CONFIDENCE_FACTOR,                 CHRONIC_HCC,             DX_SOURCE,  GAP_STATUS,             CLAIM_TYPE, CLAIM_BID,             CLAIM_DATE,             DIAG_CD,             RISK_YEAR,             HRA,             HOME_HRA,             CYCLE_RUN,             ACTIVE_IND,             CREATED_DATE,             CREATED_BY,             UPDATED_DATE,             UPDATED_BY
+        FROM suspected_gaps_insert_view
+    """)
+    
+    logging.info(f"Completed inserting into risk_member_hcc table")
+
+    return insert_df
+#########################################################################
+
+def save_to_draft_gaps_table(spark, catalog, gap_schema_curation, df_M1, audit_metadata, logger):
+    """
+    Save draft gaps to Delta table with proper schema casting and optimization.
+    
+    Writes draft gaps to the draft_gaps table partitioned by SOURCE_LOAD_MONTH.
+    Applies proper data type casting and includes audit columns.
+    
+    Args:
+        spark: SparkSession instance
+        catalog: Catalog name
+        gap_schema_curation: Gap schema name
+        df_M1: Draft gaps DataFrame to save
+        current_user: Current user for audit trail
+        logger: Logger instance for tracking
+    
+    Returns:
+        None (writes to Delta table)
+        
+    Table Schema:
+        - 38 gap-related columns (METHOD_ID, CLAIM_CD, CC_ID, etc.)
+        - Partitioned by SOURCE_LOAD_MONTH
+        - Includes audit columns: CREATED_DATE, CREATED_BY, UPDATED_DATE, UPDATED_BY
+        
+    Optimizations:
+        - Repartitions by SOURCE_LOAD_MONTH for optimal file distribution
+        - Uses insertInto() for existing partitioned tables (faster than saveAsTable)
+        - Enables optimizeWrite for better file sizing
+        - Append mode to preserve existing data
+        
+    Note:
+        Table partition must already be defined in DDL.
+        Do not use .partitionBy() with insertInto().
+    """
+    df_to_write = df_M1.select(
+        col("METHOD_ID").cast("smallint"),
+        col("CLAIM_CD_TYPE").cast("string"),
+        col("CLAIM_CD").cast("string"),
+        col("CC_ID").cast("int"),
+        col("PERCENT_WEIGHT").cast("decimal(7,6)"),
+        col("CC_CODE").cast("string"),
+        col("CC_DESCRIPTION").cast("string"),
+        col("SAS_MODEL_YEAR").cast("smallint"),
+        col("SAS_MODEL_VERSION").cast("string"),
+        col("CLAIM_CD_MODIFIER").cast("string"),
+        col("CLAIM_CD_MODIFIER_TYPE").cast("string"),
+        col("EXCLUSION_1").cast("string"),
+        col("EXCLUSION_2").cast("string"),
+        col("EXCLUSION_TYPE_1").cast("string"),
+        col("EXCLUSION_TYPE_2").cast("string"),
+        col("QUALIFIED_CLAIM").cast("smallint"),
+        col("RISK_YEAR").cast("int"),
+        col("CLAIM_BID").cast("bigint"),
+        col("MEMBER_BID").cast("bigint"),
+        col("CLM_PMT_STS_CD").cast("string"),
+        col("CLM_TP_CD").cast("string"),
+        col("TP_OF_BILL_CD").cast("string"),
+        col("CLAIM_DT").cast("date"),
+        col("ALLWD_AMT").cast("decimal(10,2)"),
+        col("SOURCE_LOAD_MONTH").cast("string"),  # Partition column
+        col("CLM_LN_NUM").cast("decimal(3,0)"),
+        col("CPT_AND_HCPCS_CD").cast("string"),
+        col("DIAG_TYPE_CD").cast("string"),
+        col("DIAG_NUM").cast("string"),
+        col("DIAG_CD").cast("string"),
+        col("PRINC_PROC_CD").cast("string"),
+        col("QUALIFY_CLAIMS").cast("string"),
+        col("INVALID_CPT_HCPCS").cast("string"),
+        col("CODE").cast("string"),
+        col("GAP_REASON").cast("string"),
+        col("GAP_STATUS").cast("string"),
+        col("MATCHED_CODE").cast("string"),
+        col("MATCHED_DATE").cast("string"),
+        col("SCENARIO_TYPE").cast("string"),
+        col("HOME_PLAN_ID_CD").cast("string"),
+         # ✅ Use lit() for constants; cast to timestamp if desired
+        F.lit(audit_metadata['created_date']).cast("timestamp").alias("CREATED_DATE"),
+        F.lit(audit_metadata['created_by']).alias("CREATED_BY"),
+        F.lit(audit_metadata['updated_date']).cast("timestamp").alias("UPDATED_DATE"),
+        F.lit(audit_metadata['updated_by']).alias("UPDATED_BY"),
+    )    
+    # # OPTIMIZATION: Repartition by partition column for optimal file distribution
+    # df_to_write = df_to_write.repartition("SOURCE_LOAD_MONTH")
+    # # FASTER: Use insertInto for existing partitioned table
+    # # NOTE: Remove .partitionBy() - table partition is already defined in DDL
+    # df_to_write.write \
+    #     .format("delta") \
+    #     .mode("append") \
+    #     .option("optimizeWrite", "true") \
+    #     .insertInto(f"{catalog}.{gap_schema_curation}.draft_gaps", overwrite=False)
+    df_to_write.write \
+    .format("delta") \
+    .mode("append") \
+    .option("optimizeWrite", "true") \
+    .option("autoOptimize.optimizeWrite", "true") \
+    .insertInto(f"{catalog}.{gap_schema_curation}.draft_gaps", overwrite=False)
+    
+    logger.info(f"Data saved to: {catalog}.{gap_schema_curation}.draft_gaps")
+
+def get_time_period(spark, catalog, ma_reference, risk_year,no_of_year):
+    """Get time periods for specified number of years."""
+    risk_year = int(risk_year)
+    no_of_year = int(no_of_year)
+    start_year = risk_year - no_of_year + 1
+    begin_date = f"{start_year}-01-01"
+    end_date = f"{risk_year}-12-31"
+    
+    query = f"""
+        SELECT TIME_PERIOD 
+        FROM {catalog}.{ma_reference}.time_periods 
+        WHERE BEGIN_DATE >= '{begin_date}' 
+          AND END_DATE <= '{end_date}'
+          AND TIME_PERIOD_TYPE_CD='C'
+    """
+    time_period_list = [str(row['TIME_PERIOD']) for row in spark.sql(query).collect()]
+    return ','.join(time_period_list)
+
+def save_to_draft_gaps_details_table(spark, catalog, gap_schema_curation, df_details, audit_metadata, logger):
+    """
+    Save dataframe to draft_gaps_with_details table with proper casting.
+    
+    Args:
+        spark: SparkSession
+        catalog: Catalog name
+        gap_schema_curation: Schema name
+        df_details: DataFrame with draft gaps details
+        audit_metadata: Dictionary containing audit metadata
+        logger: Logger instance
+    """
+    df_to_write = df_details.select(
+        col("METHOD_ID").cast("smallint"),
+        col("CLAIM_CD_TYPE").cast("string"),
+        col("CLAIM_CD").cast("string"),
+        col("CC_ID").cast("int"),
+        col("PERCENT_WEIGHT").cast("decimal(7,6)"),
+        col("CC_DESCRIPTION").cast("string"),
+        col("SAS_MODEL_YEAR").cast("smallint"),
+        col("SAS_MODEL_VERSION").cast("string"),
+        col("CLAIM_CD_MODIFIER").cast("string"),
+        col("CLAIM_CD_MODIFIER_TYPE").cast("string"),
+        col("EXCLUSION_1").cast("string"),
+        col("EXCLUSION_2").cast("string"),
+        col("EXCLUSION_TYPE_1").cast("string"),
+        col("EXCLUSION_TYPE_2").cast("string"),
+        col("QUALIFIED_CLAIM").cast("smallint"),
+        col("RISK_YEAR").cast("int"),
+        col("CLAIM_BID").cast("bigint"),
+        col("MEMBER_BID").cast("bigint"),
+        col("CLM_PMT_STS_CD").cast("string"),
+        col("CLM_TP_CD").cast("string"),
+        col("TP_OF_BILL_CD").cast("string"),
+        col("CLAIM_DT").cast("date"),
+        col("ALLWD_AMT").cast("decimal(10,2)"),
+        col("SOURCE_LOAD_MONTH").cast("string"),  # Partition column
+        col("CLM_LN_NUM").cast("decimal(3,0)"),
+        col("CPT_AND_HCPCS_CD").cast("string"),
+        col("DIAG_TYPE_CD").cast("string"),
+        col("DIAG_NUM").cast("string"),
+        col("DIAG_CD").cast("string"),
+        col("PRINC_PROC_CD").cast("string"),
+        col("QUALIFY_CLAIMS").cast("string"),
+        col("INVALID_CPT_HCPCS").cast("string"),
+        col("CODE").cast("string"),
+        col("GAP_REASON").cast("string"),
+        col("GAP_STATUS").cast("string"),
+        col("MATCHED_CODE").cast("string"),
+        col("MATCHED_DATE").cast("string"),
+        col("SCENARIO_TYPE").cast("string"),
+        col("MODEL_VERSION").cast("string"),
+        col("MATCHING_YN").cast("string"),
+        col("CC_CODE").cast("string"),
+        col("SUPPRESSION1_YN").cast("string"),
+        col("SUPPRESSED_BY_PARENT").cast("string"),
+        col("SUPPRESSION2_YN").cast("string"),
+        col("HOME_PLAN_ID_CD").cast("string"),
+        # ✅ Use lit() for constants; cast to timestamp if desired
+        F.lit(audit_metadata['created_date']).cast("timestamp").alias("CREATED_DATE"),
+        F.lit(audit_metadata['created_by']).alias("CREATED_BY"),
+        F.lit(audit_metadata['updated_date']).cast("timestamp").alias("UPDATED_DATE"),
+        F.lit(audit_metadata['updated_by']).alias("UPDATED_BY"),
+    )
+    
+    # FASTER: Use insertInto for existing partitioned table
+    df_to_write.write \
+        .format("delta") \
+        .mode("append") \
+        .option("optimizeWrite", "true") \
+        .insertInto(f"{catalog}.{gap_schema_curation}.draft_gaps_with_details", overwrite=False)
+    
+    logger.info(f"Data appended to: {catalog}.{gap_schema_curation}.draft_gaps_with_details")
+
+############################## Method 4 Integration Function########################
+def method4_integration_with_suspected_gaps(spark,catalog,gap_schema_curation,cycle_run, risk_year, no_of_year, mid,
+    audit_metadata, logger, save_table):
+    """
+    Builds suspected_gaps from member_persistent_cc
+
+      1) Filter member_persistent_cc for the cycle_run and suspect statuses
+      2) Pick the latest row per (MEMBER_BID, DIAG_CD, SUSPECT_STATUS_TRIM, CYCLE_RUN)
+      3) Project into {catalog}.{gap_schema_curation}.suspected_gaps schema & types
+      4) Append to the target Delta table (partitioned by SOURCE_LOAD_MONTH)
+
+    
+    Mapping highlights / choices:
+      - CLAIM_CD_TYPE: constant "DIAGNOSIS"
+      - CLAIM_CD: DIAG_CD (padded to VARCHAR(20))
+      - SAS_MODEL_VERSION: from source
+      - SAS_MODEL_YEAR: 
+      - MODEL_VERSION: mapped to RISK_MODEL_VERSION (trimmed to 20)
+      - GAP_STATUS: SUSPECT_STATUS (trimmed and restricted to suspect values)
+      - HOME_PLAN_ID_CD, FREQUENCY, CONFIDENCE_FACTOR: from source (fallbacks used for nulls)
+      - CC_CODE (INT): cast from VARCHAR(50); non-numeric -> NULL
+      - CREATE_GAP: Y if "Open Suspect", else N
+    """
+
+    try:
+        # --- Tables (source -> target) ---
+        source_tbl = f"{catalog}.{gap_schema_curation}.member_persistent_cc"
+        target_tbl = f"{catalog}.{gap_schema_curation}.suspected_gaps"
+        risk_year = int(risk_year)
+        no_of_year = int(no_of_year)
+        start_year = risk_year - no_of_year + 1
+        # 1) Slice source
+        src = spark.table(source_tbl)
+
+        pf = (
+            src
+            .filter((F.col("CYCLE_RUN") == F.lit(cycle_run)) & ((F.col("RISK_YEAR") >= F.lit(start_year)) & (F.col("RISK_YEAR") <= F.lit(risk_year))))
+            .withColumn("SUSPECT_STATUS_TRIM", F.trim(F.col("SUSPECT_STATUS")))
+            .filter(
+                F.col("SUSPECT_STATUS_TRIM").isin(
+                    "Open Suspect", "Closed Suspect", "Open Non Suspect"
+                )
+            )
+        )
+        # 2) Latest row per key
+        w = (
+            Window
+            # .partitionBy("MEMBER_BID", "DIAG_CD", "SUSPECT_STATUS_TRIM", "CYCLE_RUN")
+            .partitionBy("RISK_YEAR","SAS_MODEL_VERSION","MEMBER_BID", "CC_CODE", "SUSPECT_STATUS_TRIM", "CYCLE_RUN")
+            .orderBy(
+                F.col("CREATED_DATE").desc()
+            )
+        )
+        latest = pf.withColumn("rn", F.row_number().over(w)).filter(F.col("rn") == 1)
+        # Source presence guards (for resilience)
+        cols = set(latest.columns)
+        
+        # 3) Project EXACT target schema (order & types per DDL)
+        to_insert = latest.select(
+            # 1
+            F.lit(4).cast("smallint").alias("METHOD_ID"),
+            # 2-3            
+            F.lit("DIAGNOSIS").alias("CLAIM_CD_TYPE"),            
+            F.lit("CLAIM_CODE").alias("CLAIM_CD"),             
+            # 4-6            
+            F.lit(None).cast("int").alias("CC_ID"),             
+            F.col("CONFIDENCE_FACTOR").cast(DecimalType(7, 6)).alias("PERCENT_WEIGHT"),             
+            F.col("CC_DESCRIPTION").alias("CC_DESCRIPTION"),             
+            # 7-10            
+            F.col("RISK_MODEL_YEAR").cast("smallint").alias("SAS_MODEL_YEAR"),  
+            # no year present in source             
+            F.col("SAS_MODEL_VERSION").alias("SAS_MODEL_VERSION"),             
+            F.lit(None).cast("string").alias("CLAIM_CD_MODIFIER"),            
+            F.lit(None).cast("string").alias("CLAIM_CD_MODIFIER_TYPE"),             
+            # 11-14             
+            F.lit("NA").alias("EXCLUSION_1"),            
+            F.lit("NA").alias("EXCLUSION_2"),            
+            F.lit("NA").alias("EXCLUSION_TYPE_1"),            
+            F.lit("NA").alias("EXCLUSION_TYPE_2"),            
+            # 15-18            
+            F.lit(None).cast("smallint").alias("QUALIFIED_CLAIM"),            
+            F.col("RISK_YEAR").cast("int").alias("RISK_YEAR"),            
+            F.col("CLAIM_BID").cast("bigint").alias("CLAIM_BID"),            
+            F.col("MEMBER_BID").cast("bigint").alias("MEMBER_BID"),             
+            # 19-23            
+            F.lit(None).cast("string").alias("CLM_PMT_STS_CD"),            
+            F.lit(None).cast("string").alias("CLM_TP_CD"),             
+            F.lit(None).cast("string").alias("TP_OF_BILL_CD"),            
+            F.col("CLAIM_DATE").cast("date").alias("CLAIM_DT"),            
+            F.lit(None).cast(DecimalType(10, 2)).alias("ALLWD_AMT"),             
+            # 24-29             
+            F.col("CYCLE_RUN").alias("SOURCE_LOAD_MONTH"),            
+            F.lit(None).cast(DecimalType(3, 0)).alias("CLM_LN_NUM"),            
+            F.lit(None).cast("string").alias("CPT_AND_HCPCS_CD"),             
+            F.lit(None).cast("string").alias("DIAG_TYPE_CD"),             
+            F.lit(None).cast("string").alias("DIAG_NUM"),             
+            F.col("DIAG_CD").alias("DIAG_CD"),             
+            # 30-34             
+            F.lit(None).cast("string").alias("PRINC_PROC_CD"),             
+            F.lit(None).cast("string").alias("QUALIFY_CLAIMS"),             
+            F.lit(None).cast("string").alias("INVALID_CPT_HCPCS"),            
+            F.lit(None).cast("string").alias("CODE"),            
+            F.col("PERSISTENT_STATUS_REASON").alias("GAP_REASON"),            
+            # 35-39            
+            F.col("SUSPECT_STATUS_TRIM").alias("GAP_STATUS"),           
+            F.lit(None).cast("string").alias("MATCHED_CODE"),         
+            F.lit(None).cast("string").alias("MATCHED_DATE"),           
+            F.lit("Inclusion Logic").cast("string").alias("SCENARIO_TYPE"),         
+            F.col("RISK_MODEL_VERSION").cast("string").alias("MODEL_VERSION"),    
+            # <-- mapped from RISK_MODEL_VERSION           
+            # 40-44            
+            F.lit(None).cast("string").alias("MATCHING_YN"),           
+            F.concat(
+                F.lit("CC"),
+                F.lpad(F.regexp_extract(F.upper(F.col("CC_CODE")), r"(\d+)$", 1), 3, "0")
+            ).alias("CC_CODE"),
+            F.when(F.col("SUSPECT_STATUS_TRIM").isin("Open Suspect", "Closed Suspect"), F.lit("N"))
+            .when(F.col("SUSPECT_STATUS_TRIM") == "Open Non Suspect", F.lit("Y"))
+            .otherwise(F.lit(None).cast("string")).alias("SUPPRESSION1_YN"),
+            F.when(F.col("SUSPECT_STATUS_TRIM").isin("Open Suspect", "Closed Suspect", "Open Non Suspect"), F.lit("N"))
+            .otherwise(F.lit(None).cast("string")).alias("SUPPRESSION2_YN"),
+            F.lit(None).cast("string").alias("SUPPRESSED_BY_PARENT"),
+            # 45  
+            F.when(F.col("SUSPECT_STATUS_TRIM") == F.lit("Open Suspect"), 
+            F.lit("Y")).otherwise(F.lit("N")).cast("string").alias("CREATE_GAP"),           
+            # 46-48           
+            F.col("HOME_PLAN_ID_CD").cast("string").alias("HOME_PLAN_ID_CD"),       
+            F.col("FREQUENCY").cast("int").alias("FREQUENCY"),          
+            F.col("CONFIDENCE_FACTOR").cast("decimal(7,6)").alias("CONFIDENCE_FACTOR"),             
+            # 49-52           
+             # ✅ Use lit() for constants; cast to timestamp if desired
+            F.lit(audit_metadata['created_date']).cast("timestamp").alias("CREATED_DATE"),
+            F.lit(audit_metadata['created_by']).alias("CREATED_BY"),
+            F.lit(audit_metadata['updated_date']).cast("timestamp").alias("UPDATED_DATE"),
+            F.lit(audit_metadata['updated_by']).alias("UPDATED_BY"),
+        )
+
+        # 4) Append (safer than insertInto for order/type drift)
+        if save_table:
+            to_insert.write.mode("append").saveAsTable(target_tbl)
+
+        logger.info(
+            f"method4_integration_with_suspected_gaps: appended rows to {target_tbl} for cycle_run={cycle_run}"
+        )
+        
+        return to_insert
+
+    except Exception as e:
+        logger.error(f"method4_integration_with_suspected_gaps failed for cycle_run={cycle_run}: {e}")
+        raise e
+####################################################################################################
+def run_gs_main_method_wise(spark, env, catalog, schema, schema_curation, schema_ingestion, gap_schema_curation, ma_reference, mid, risk_year, no_of_year, plan_name, audit_metadata, cycle_run, logger, save_table, df_member_output, time_period_list,threshold_percent):
+    """
+    Main function to run the gap scoring logic.
+    """
+    try:
+        df_method_metadata = get_method_metadata_df(spark, catalog, ma_reference, "ref_method_metadata")
+        df_method_metadata.cache()
+        df_ref_method_metadata_codegroups = get_method_metadata_df(spark, catalog, ma_reference, "ref_method_metadata_codegroups")
+        df_cc_code_mapping = get_cc_code_mapping(spark, catalog, ma_reference)
+        df_ref_hirarchy = get_ref_hierarchy(spark, catalog, ma_reference)
+        df_ref_method_frequency = get_method_metadata_df(spark, catalog, ma_reference, "ref_method_frequency")
+        
+        df_member_cc_with_BID = generate_member_cc_with_BID(spark, df_member_output)
+        logger.info(f"*******processing start method_id:{mid}***********")
+    except Exception as e:
+        logger.error(f"Error in initialization: {str(e)}")
+        raise e
+
+    try:
+        if mid == "1":
+            try:
+                df_method_metadata_inclusion_1 = get_method_wise_inclusion(spark, df_method_metadata, mid)
+                logger.info(f"testing for method_id:{mid} df_method_metadata_inclusion ")
+                df_pharmacy = get_pharmacy_df(spark, catalog, schema, risk_year, no_of_year)
+                df_method_metadata_with_cc_code = join_method_metadata_with_cc_code(df_method_metadata_inclusion_1, df_cc_code_mapping)
+                df_draft_gap_M1 = create_draft_gap_M1(df_method_metadata_with_cc_code, df_pharmacy)
+                logger.info(f"<-------------before saving-----df_draft_gap_M1")
+                if save_table:
+                    save_to_draft_gaps_table(spark, catalog, gap_schema_curation, df_draft_gap_M1, audit_metadata, logger)
+                df_draft_gap = df_draft_gap_M1.filter(col("GAP_STATUS") == "Create Gap").distinct()
+                
+            except Exception as e:
+                logger.error(f"Error in method_id 1 block: {str(e)}")
+                raise e
+
+        elif mid == "2":
+            try:
+                df_method_metadata_inclusion_2 = get_method_wise_inclusion(spark, df_method_metadata, mid)
+                df_professional_all = get_medical_professional_all(spark, catalog, schema, risk_year, no_of_year)
+                df_facility_all = get_medical_facility_all(spark, catalog, schema, risk_year, no_of_year)
+                df_final_medical_claims_all = df_facility_all.unionAll(df_professional_all)
+                df_method_metadata_with_cc_code = join_method_metadata_with_cc_code(df_method_metadata_inclusion_2, df_cc_code_mapping)
+                df_draft_gap_M2 = create_draft_gap_M2(df_method_metadata_with_cc_code, df_final_medical_claims_all)
+                if save_table:
+                    save_to_draft_gaps_table(spark, catalog, gap_schema_curation, df_draft_gap_M2, audit_metadata, logger)
+                logger.info(f"Total Draft Gaps Method{mid}")
+                df_draft_gap = df_draft_gap_M2.filter(col("GAP_STATUS") == "Create Gap").distinct()
+            except Exception as e:
+                logger.error(f"Error in method_id 2 block: {str(e)}")
+                raise e
+
+        elif mid == "10":
+            # Initialize DataFrame variable for cleanup
+            df_final_medical_claims_all = None
+            try:
+                df_professional_all = get_medical_professional_all(spark, catalog, schema, risk_year, no_of_year)
+                logger.info(f"Professional claims loaded")
+                df_facility_all = get_medical_facility_all(spark, catalog, schema, risk_year, no_of_year)
+                logger.info(f"Facility claims loaded")
+                # PERFORMANCE: Cache medical claims as it's used 3 times (inclusion, scenario1, scenario2)
+                df_final_medical_claims_all = df_facility_all.unionAll(df_professional_all)
+                # df_method_metadata_inclusion_10 = get_method_metadata_inclusion_10(spark, catalog, ma_reference, df_method_metadata)
+                df_method_metadata_inclusion_10 = get_method_wise_inclusion(spark, df_method_metadata, mid)
+                logger.info(f"df_method_metadata_inclusion_10 ")
+                df_method_metadata_inclusion_with_cc_code = join_method_metadata_with_cc_code(df_method_metadata_inclusion_10, df_cc_code_mapping)
+                df_metadata_broadcast = broadcast(df_method_metadata_inclusion_with_cc_code)
+                df_draft_gap_inclusion_final = create_draft_gap_M_10(df_metadata_broadcast, df_final_medical_claims_all)
+                # df_draft_gap_inclusion_final = df_draft_gap_inclusion
+                logger.info(f"Total Draft Gaps Method10 Inclusion")
+                    
+                df_method_exclusions = load_method_exclusions_10(df_method_metadata)
+                logger.info(f"Initial count for Method10 exclusion :")
+                df_final_scenario1 = get_scenario1_gap_claims_optimized(df_method_exclusions, df_final_medical_claims_all, df_ref_method_metadata_codegroups)
+                if df_final_scenario1 is None:
+                    logger.error("df_final_scenario1 is None. Check input data or function implementation.")
+                else:
+                    logger.info(f"Final Scenario 1 DataFrame records:")
+                df_final_scenario2 = process_scenario2(df_method_exclusions, df_final_medical_claims_all, df_ref_method_metadata_codegroups)
+                if df_final_scenario2 is None:
+                    logger.error("df_final_scenario2 is None. Check input data or function implementation.")
+                else:
+                    logger.info(f"Final Scenario 2 DataFrame row count:")
+                common_gap_columns = ['ALLWD_AMT', 'CC_ID', 'CLAIM_BID', 'CLAIM_CD', 'CLAIM_CD_MODIFIER', 'CLAIM_CD_MODIFIER_TYPE', 'CLAIM_CD_TYPE', 'CLAIM_DT', 'CLM_LN_NUM', 'CLM_PMT_STS_CD', 'CLM_TP_CD', 'CODE', 'CPT_AND_HCPCS_CD', 'DIAG_CD', 'DIAG_NUM', 'DIAG_TYPE_CD', 'EXCLUSION_1', 'EXCLUSION_2', 'EXCLUSION_TYPE_1', 'EXCLUSION_TYPE_2', 'GAP_REASON', 'GAP_STATUS', 'MATCHED_CODE', 'MATCHED_DATE', 'MEMBER_BID', 'METHOD_ID', 'PERCENT_WEIGHT', 'PRINC_PROC_CD', 'QUALIFIED_CLAIM', 'RISK_YEAR', 'SOURCE_LOAD_MONTH', 'SCENARIO_TYPE', 'TP_OF_BILL_CD', 'INVALID_CPT_HCPCS', 'HOME_PLAN_ID_CD', 'QUALIFY_CLAIMS']
+                
+                scenario1_unique_cols = list(OrderedDict.fromkeys(df_final_scenario1.columns))
+                df_final_scenario1 = df_final_scenario1.select(scenario1_unique_cols)
+                scenario2_unique_cols = list(OrderedDict.fromkeys(df_final_scenario2.columns))
+                df_final_scenario2 = df_final_scenario2.select(scenario2_unique_cols)
+                df_final_scenario1_gap = df_final_scenario1.select(common_gap_columns)
+                df_final_scenario2_gap = df_final_scenario2.select(common_gap_columns)
+                df_exclusion_draft_gap = df_final_scenario1_gap.unionByName(df_final_scenario2_gap)
+                logger.info(f"Exclusion Draft Gap row count")
+                df_exclusion_draft_gap_with_cc_code = df_exclusion_draft_gap.join(
+                    F.broadcast(df_cc_code_mapping),
+                    df_exclusion_draft_gap["CC_ID"] == df_cc_code_mapping["CC_ID"],
+                    "left_outer"
+                ).select(
+                    df_exclusion_draft_gap["*"],
+                    df_cc_code_mapping["SAS_MODEL_VERSION"],
+                    df_cc_code_mapping["SAS_MODEL_YEAR"],
+                    df_cc_code_mapping["CC_CODE"],
+                    df_cc_code_mapping["CC_DESCRIPTION"],
+                                        # Compute CHRONIC_HCC from CHRONIC column (1 -> "Y", else -> "N")
+                    F.when(F.col("CHRONIC") == 1, F.lit("Y")).otherwise(F.lit("N")).alias("CHRONIC_HCC")
+                ).distinct()
+                exclusion_unique_cols = list(OrderedDict.fromkeys(df_exclusion_draft_gap_with_cc_code.columns))
+                df_exclusion_draft_gap_with_cc_code = df_exclusion_draft_gap_with_cc_code.select(exclusion_unique_cols)
+                unique_cols = list(OrderedDict.fromkeys(df_draft_gap_inclusion_final.columns))
+                df_draft_gap_inclusion_final = df_draft_gap_inclusion_final.select(unique_cols)
+                logger.info(f" Total Draft gaps for Method10 Exclusion: ")
+                logger.info(f"Exclusion Draft Gap DataFrame row count")
+                df_draft_gap_method10 = df_draft_gap_inclusion_final.unionByName(df_exclusion_draft_gap_with_cc_code)
+                if save_table:
+                    logger.info(f"Total Draft gaps for method 10 : ")
+                    save_to_draft_gaps_table(spark, catalog, gap_schema_curation, df_draft_gap_method10, audit_metadata, logger)
+                df_draft_gap = df_draft_gap_method10.filter(col("GAP_STATUS") == "Create Gap").distinct()
+                logger.info(f"Total Gaps for Method10 Exclusion ")
+            except Exception as e:
+                logger.error(f"Error in method_id 10 block: {str(e)}")
+                raise e
+        else:
+            logger.error(f"Invalid method_id:{mid}")
+            raise Exception(f"Invalid method_id:{mid}")
+    except Exception as e:
+        logger.error(f"Error in method_id condition block: {str(e)}")
+        raise e
+    try:
+        df_draft_gap_with_version = df_draft_gap.withColumn("MODEL_VERSION", concat(lit('v'), regexp_extract(col("SAS_MODEL_VERSION"), r'V(24|28)', 1))) #Need to add regular experession for ESRD, RXHCC
+        # Adding Suppression Logic 1  
+        df_draft_gap_with_version = df_draft_gap_with_version.filter(col("MODEL_VERSION") != "v")
+        df_draft_gap_with_suppression1 = add_suppression1_on_draft_gap(df_draft_gap_with_version, df_ref_hirarchy)
+        df_final_gap = join_gap_with_member_cc_optimized(df_draft_gap_with_suppression1, df_member_cc_with_BID)
+        # Adding Suppression Logic 2
+        df_gap_with_version_and_full_suppression = two_level_suppression_logic_final(df_final_gap, df_member_cc_with_BID, df_ref_hirarchy)
+        logger.info(f"<---------after Suppression2 DataFrame columns: {df_gap_with_version_and_full_suppression.columns}")
+        
+        if save_table and df_gap_with_version_and_full_suppression is not None:
+            save_to_draft_gaps_details_table(spark, catalog, gap_schema_curation, df_gap_with_version_and_full_suppression, audit_metadata, logger)
+            logger.info(f"  Rows appended successfully to: {catalog}.{gap_schema_curation}.draft_gaps_with_details")
+        
+        df_gap_with_version_suppression_final = add_create_gap_status_column(df_gap_with_version_and_full_suppression)
+        # load_risk_member_and_scores_df = load_risk_member_and_reference_data(spark, catalog, schema, schema_curation, ma_reference, df_member_output)
+        if save_table and df_gap_with_version_suppression_final is not None:
+            logger.info(f"Started Saving into suspected_gaps------")
+            df_suspected_gaps = save_to_suspected_gaps_with_frequency(spark, catalog, ma_reference, gap_schema_curation, df_gap_with_version_suppression_final, audit_metadata, logger)
+            # updated_risk_member_hcc_df = insert_risk_member_hcc_from_gaps(spark, catalog, schema_curation, df_suspected_gaps, load_risk_member_and_scores_df, risk_year, no_of_year, mid, audit_metadata,threshold_percent)
+            logger.info(f"Completed Saving into suspected_gaps------")
+    except Exception as e:
+        logger.error(f"Error in final gap processing block: {str(e)}")
+        raise e
+
+    return df_suspected_gaps
+###########################################END#########################################
+#####Calling main gs####
+
+def call_gp_suspecting_main(
+    spark, env, catalog, schema, schema_curation, schema_ingestion,
+    gap_schema_curation, ma_reference, method_list, risk_year, no_of_year,
+    plan_name, current_user, source_load_year_month, logger, save_table, threshold_percent, risk_member_hcc_summary_columns
+):
+    audit_metadata = {
+        'created_date': datetime.now(),
+        'created_by': current_user,
+        'updated_date': datetime.now(),
+        'updated_by': current_user
+    }
+
+    time_period_list = get_time_period(spark, catalog, ma_reference, risk_year, no_of_year)
+    logger.info(f"time_period_list: {time_period_list}")
+
+    df_member_output = read_risk_member_output(
+        spark, catalog, schema_curation, time_period_list, ma_reference, source_load_year_month
+    )
+
+    # Collect each method's output here and union at the end
+    dfs_to_union = []
+    final_df = None
+    load_risk_member_and_scores_df = None  # ensure it exists for final insert if needed
+    # df_risk_member_hss = spark.createDataFrame([], StructType([]))
+
+    for mid in method_list:
+        try:
+            logger.info(f"Starting method_id {mid} ...")
+
+            if mid in ("1", "2", "10"):
+                update_risk_member_hcc_with_gaps = run_gs_main_method_wise(
+                    spark, env, catalog, schema, schema_curation, schema_ingestion,
+                    gap_schema_curation, ma_reference, mid, risk_year, no_of_year,
+                    plan_name, audit_metadata, source_load_year_month, logger, save_table,
+                    df_member_output, time_period_list, threshold_percent
+                )
+                if update_risk_member_hcc_with_gaps is not None:
+                    dfs_to_union.append(update_risk_member_hcc_with_gaps)
+                    # df_risk_member_hss.union(update_risk_member_hcc_with_gaps)
+                    logger.info(f"method_id {mid} produced records.")
+                else:
+                    logger.info(f"method_id {mid} returned no DataFrame (None).")
+                logger.info(f"method_id {mid} executed successfully.")
+
+            elif mid == "4":
+                # Method 4: persistent integration to Suspected Gaps table
+                method4_df = method4_integration_with_suspected_gaps(
+                    spark, catalog, gap_schema_curation, source_load_year_month,
+                    risk_year, no_of_year, mid, audit_metadata, logger, save_table
+                )
+
+                if method4_df is not None:
+                    dfs_to_union.append(method4_df)
+                    logger.info(f"method4_df running")
+                else:
+                    logger.info("method4_df is None.")
+
+                # # If you'll need risk member and reference data later for insert, prepare it
+                # if save_table and load_risk_member_and_scores_df is None:
+                #     load_risk_member_and_scores_df = load_risk_member_and_reference_data(
+                #         spark, catalog, schema, schema_curation, ma_reference, df_member_output
+                #     )
+
+                logger.info(f"method_id {mid} executed successfully.")
+            else:
+                logger.error(f"Invalid method_id: {mid}")
+                raise Exception("Invalid method_id")
+
+        except Exception as e:
+            logger.error(f"Error processing method_id {mid}: {str(e)}")
+            raise
+
+    # Union everything collected
+    if dfs_to_union:
+        logger.info("Unioning DataFrames produced by the requested methods.")
+        final_df = reduce(
+            lambda a, b: a.unionByName(b, allowMissingColumns=True),
+            dfs_to_union
+        )
+        logger.info(f"final_df columns after union: {final_df.columns}")
+        # logger.info(f"final_df total records after union: {final_df.count()}")
+    else:
+        logger.info("No DataFrames were produced by the requested methods; final_df is None.")
+        final_df = None
+
+    # If we are saving, make sure the helper DF is available, then insert once for the combined result
+    if save_table and final_df is not None:
+        if load_risk_member_and_scores_df is None:
+            load_risk_member_and_scores_df = load_risk_member_and_reference_data(
+                spark, catalog, schema, schema_curation, ma_reference, df_member_output
+            )
+
+        # Use a method_list as method_id to reflect the combined insert
+        logger.info(
+            "Started insert_risk_member_hcc_from_gaps for combined result (ALL methods)."
+        )
+        df_update_risk_member_hcc_with_gaps_method_all = insert_risk_member_hcc_from_gaps(
+            spark, catalog, schema_curation, final_df, load_risk_member_and_scores_df,
+            risk_year, no_of_year, method_list, audit_metadata, threshold_percent
+        )
+        logger.info(
+            "Completed insert_risk_member_hcc_from_gaps for combined result (ALL methods)."
+        )
+        logger.info(
+            "Starting insert_risk_member_hcc_summary for combined result (ALL methods)."
+        )
+        # creating a disease interaction score and inserting into risk_member_hcc table
+
+        risk_member_hcc_interaction_df = insert_interaction_coefficient_risk_member_hcc(spark,catalog,schema_curation,ma_reference,source_load_year_month,df_update_risk_member_hcc_with_gaps_method_all,audit_metadata,logger)
+        logger.info(f"Final interaction records: {risk_member_hcc_interaction_df.count()} rows")
+        df_risk_member_hcc_summary = insert_risk_member_hcc_summary(spark,catalog,schema_curation, df_update_risk_member_hcc_with_gaps_method_all, risk_member_hcc_summary_columns,logger)
+        logger.info(
+            "Complted insert_risk_member_hcc_summary for combined result (ALL methods) has columns {df_risk_member_hcc_summary.columns}."
+        )
+        
+    return final_df
+
+def save_to_suspected_gaps_with_frequency(
+    spark, catalog, ma_reference, gap_schema_curation, df_details, audit_metadata, logger
+):
+    """
+    Save dataframe to suspected_gaps table with proper casting and new CC_ID collapse + frequency logic.
+ 
+    New logic:
+      - Count distinct CC_ID per (METHOD_ID, CLAIM_CD_TYPE, CLAIM_CD, CC_CODE, MEMBER_BID)
+      - Keep the oldest CLAIM_DT row per group (ties by smallest CLAIM_BID)
+      - If count == ref FREQUENCY, set FREQUENCY = ref.FREQUENCY and CONFIDENCE_FACTOR = ref.PERCENT_WEIGHT
+        else set FREQUENCY = count and CONFIDENCE_FACTOR = 1
+        New Calculation(discussed with Rakesh):
+        NET_PERCENT_WEIGHT = 1 - (1 - PERCENT_WEIGHT) * (1 - [next_score]) 
+        PERCENT_WEIGHT: from method metadata
+        Frequency -> calculated 
+
+    """
+ 
+    # Cast all fields as before
+    df_to_write = df_details.select(
+        col("METHOD_ID").cast("smallint"),
+        col("CLAIM_CD_TYPE").cast("string"),
+        col("CLAIM_CD").cast("string"),
+        col("CC_ID").cast("int"),
+        col("PERCENT_WEIGHT").cast("decimal(7,6)"),
+        col("CC_DESCRIPTION").cast("string"),
+        col("SAS_MODEL_YEAR").cast("smallint"),
+        col("SAS_MODEL_VERSION").cast("string"),
+        col("CLAIM_CD_MODIFIER").cast("string"),
+        col("CLAIM_CD_MODIFIER_TYPE").cast("string"),
+        col("EXCLUSION_1").cast("string"),
+        col("EXCLUSION_2").cast("string"),
+        col("EXCLUSION_TYPE_1").cast("string"),
+        col("EXCLUSION_TYPE_2").cast("string"),
+        col("QUALIFIED_CLAIM").cast("smallint"),
+        col("RISK_YEAR").cast("int"),
+        col("CLAIM_BID").cast("bigint"),
+        col("MEMBER_BID").cast("bigint"),
+        col("CLM_PMT_STS_CD").cast("string"),
+        col("CLM_TP_CD").cast("string"),
+        col("TP_OF_BILL_CD").cast("string"),
+        col("CLAIM_DT").cast("date"),
+        col("ALLWD_AMT").cast("decimal(10,2)"),
+        col("SOURCE_LOAD_MONTH").cast("string"),
+        # Partition column
+        col("CLM_LN_NUM").cast("decimal(3,0)"),
+        col("CPT_AND_HCPCS_CD").cast("string"),
+        col("DIAG_TYPE_CD").cast("string"),
+        col("DIAG_NUM").cast("string"),
+        col("DIAG_CD").cast("string"),
+        col("PRINC_PROC_CD").cast("string"),
+        col("QUALIFY_CLAIMS").cast("string"),
+        col("INVALID_CPT_HCPCS").cast("string"),
+        col("CODE").cast("string"),
+        col("GAP_REASON").cast("string"),
+        col("GAP_STATUS").cast("string"),
+        col("MATCHED_CODE").cast("string"),
+        col("MATCHED_DATE").cast("string"),
+        col("SCENARIO_TYPE").cast("string"),
+        col("MODEL_VERSION").cast("string"),
+        col("MATCHING_YN").cast("string"),
+        col("CC_CODE").cast("string"),
+        col("CHRONIC_HCC"),
+        col("SUPPRESSION1_YN").cast("string"),
+        col("SUPPRESSED_BY_PARENT").cast("string"),
+        col("SUPPRESSION2_YN").cast("string"),
+        col("HOME_PLAN_ID_CD").cast("string"),
+        # placeholders; will be computed below
+        lit(None).cast("string").alias("FREQUENCY"),
+        col("PERCENT_WEIGHT").cast("decimal(7,6)").alias("CONFIDENCE_FACTOR"),
+        col("CREATE_GAP").cast("string"),
+         # ✅ Use lit() for constants; cast to timestamp if desired
+        F.lit(audit_metadata['created_date']).cast("timestamp").alias("CREATED_DATE"),
+        F.lit(audit_metadata['created_by']).alias("CREATED_BY"),
+        F.lit(audit_metadata['updated_date']).cast("timestamp").alias("UPDATED_DATE"),
+        F.lit(audit_metadata['updated_by']).alias("UPDATED_BY"),
+    )
+ 
+    # Frequency reference
+    df_method_frequence = get_method_metadata_df(spark, catalog, ma_reference, "ref_method_frequency")
+    # Expected keys (per your comment): METHOD_ID, CLAIM_CD_TYPE, CLAIM_CD, CC_CODE, FREQUENCY, PERCENT_WEIGHT
+    # Add SAS_MODEL_VERSION here too if your reference has it.
+ 
+    # === Fix 1: compute distinct counts via groupBy, not as a window ===
+    count_keys = ["METHOD_ID","CLAIM_CD_TYPE","CLAIM_CD","CC_CODE","MEMBER_BID","SAS_MODEL_VERSION","CC_ID"]
+    counts_df = (
+        df_to_write
+        .groupBy(*count_keys)
+        .agg(F.countDistinct("CLAIM_BID").alias("group_count"))
+    )
+ 
+    # Window to pick oldest CLAIM_DT (ties by CLAIM_BID) per group
+    grp_keys_for_oldest = ["METHOD_ID","CLAIM_CD_TYPE","CLAIM_CD","CC_CODE","MEMBER_BID","SAS_MODEL_VERSION","CC_ID"]
+    oldest_win = Window.partitionBy(*grp_keys_for_oldest).orderBy(F.col("CLAIM_DT").asc(), F.col("CLAIM_BID").asc())
+    # Oldest record per group
+    oldest_df = (
+        df_to_write
+        .withColumn("rn", F.row_number().over(oldest_win))
+        .filter(F.col("rn") == 1)
+        .drop("rn")
+    )
+ 
+    # Join oldest rows with the pre-computed group_count
+    df_collapsed = (
+        oldest_df
+        .join(counts_df, on=count_keys, how="left")
+    )
+ 
+    # === Fix 2: join to reference on code-level keys (no MEMBER_BID) ===
+    ref_join_keys = ["METHOD_ID","CLAIM_CD_TYPE","CLAIM_CD","CC_ID"]  # add "SAS_MODEL_VERSION" if your ref needs it
+    joined = (
+        df_collapsed.alias("src")
+        .join(
+            df_method_frequence.alias("fr"),
+            on=ref_join_keys,  # do NOT include MEMBER_BID here
+            how="left",
+        )
+    )
+ 
+    # Compute output FREQUENCY and CONFIDENCE_FACTOR as per rules
+    matched = (F.col("src.group_count") == F.col("fr.FREQUENCY")) & F.col("fr.FREQUENCY").isNotNull()
+ 
+    enriched = (
+        joined
+        .withColumn(
+            "FREQUENCY_OUT",
+            F.when(matched, F.col("fr.FREQUENCY").cast("string"))
+             .otherwise(F.col("src.group_count").cast("string"))
+        )
+        .withColumn(
+            "CONFIDENCE_FACTOR_OUT",
+            F.when(matched, F.col("fr.PERCENT_WEIGHT"))
+             .otherwise(col("src.PERCENT_WEIGHT").cast("decimal(7,6)"))  #if not matched bring the percent_weight of ref_method_metadata
+        )
+    )
+    # Final projection to match target schema/ordering
+    result_df = enriched.select(
+        col("src.METHOD_ID").cast("smallint").alias("METHOD_ID"),
+        col("src.CLAIM_CD_TYPE").cast("string").alias("CLAIM_CD_TYPE"),
+        col("src.CLAIM_CD").cast("string").alias("CLAIM_CD"),
+        # Keep CC_ID of the oldest claim row for the group
+        col("src.CC_ID").cast("int").alias("CC_ID"),
+        col("src.PERCENT_WEIGHT").cast("decimal(7,6)").alias("PERCENT_WEIGHT"),
+        col("src.CC_DESCRIPTION").cast("string").alias("CC_DESCRIPTION"),
+        col("src.SAS_MODEL_YEAR").cast("smallint").alias("SAS_MODEL_YEAR"),
+        col("src.SAS_MODEL_VERSION").cast("string").alias("SAS_MODEL_VERSION"),
+        col("src.CLAIM_CD_MODIFIER").cast("string").alias("CLAIM_CD_MODIFIER"),
+        col("src.CLAIM_CD_MODIFIER_TYPE").cast("string").alias("CLAIM_CD_MODIFIER_TYPE"),
+        col("src.EXCLUSION_1").cast("string").alias("EXCLUSION_1"),
+        col("src.EXCLUSION_2").cast("string").alias("EXCLUSION_2"),
+        col("src.EXCLUSION_TYPE_1").cast("string").alias("EXCLUSION_TYPE_1"),
+        col("src.EXCLUSION_TYPE_2").cast("string").alias("EXCLUSION_TYPE_2"),
+        col("src.QUALIFIED_CLAIM").cast("smallint").alias("QUALIFIED_CLAIM"),
+        col("src.RISK_YEAR").cast("int").alias("RISK_YEAR"),
+        # CLAIM_BID and CLAIM_DT from oldest row
+        col("src.CLAIM_BID").cast("bigint").alias("CLAIM_BID"),
+        col("src.MEMBER_BID").cast("bigint").alias("MEMBER_BID"),
+        col("src.CLM_PMT_STS_CD").cast("string").alias("CLM_PMT_STS_CD"),
+        col("src.CLM_TP_CD").cast("string").alias("CLM_TP_CD"),
+        col("src.TP_OF_BILL_CD").cast("string").alias("TP_OF_BILL_CD"),
+        col("src.CLAIM_DT").cast("date").alias("CLAIM_DT"),
+        col("src.ALLWD_AMT").cast("decimal(10,2)").alias("ALLWD_AMT"),
+        col("src.SOURCE_LOAD_MONTH").cast("string").alias("SOURCE_LOAD_MONTH"),
+        col("src.CLM_LN_NUM").cast("decimal(3,0)").alias("CLM_LN_NUM"),
+        col("src.CPT_AND_HCPCS_CD").cast("string").alias("CPT_AND_HCPCS_CD"),
+        col("src.DIAG_TYPE_CD").cast("string").alias("DIAG_TYPE_CD"),
+        col("src.DIAG_NUM").cast("string").alias("DIAG_NUM"),
+        col("src.DIAG_CD").cast("string").alias("DIAG_CD"),
+        col("src.PRINC_PROC_CD").cast("string").alias("PRINC_PROC_CD"),
+        col("src.QUALIFY_CLAIMS").cast("string").alias("QUALIFY_CLAIMS"),
+        col("src.INVALID_CPT_HCPCS").cast("string").alias("INVALID_CPT_HCPCS"),
+        col("src.CODE").cast("string").alias("CODE"),
+        col("src.GAP_REASON").cast("string").alias("GAP_REASON"),
+        col("src.GAP_STATUS").cast("string").alias("GAP_STATUS"),
+        col("src.MATCHED_CODE").cast("string").alias("MATCHED_CODE"),
+        col("src.MATCHED_DATE").cast("string").alias("MATCHED_DATE"),
+        col("src.SCENARIO_TYPE").cast("string").alias("SCENARIO_TYPE"),
+        col("src.MODEL_VERSION").cast("string").alias("MODEL_VERSION"),
+        col("src.MATCHING_YN").cast("string").alias("MATCHING_YN"),
+        col("src.CC_CODE").cast("string").alias("CC_CODE"),
+        col("src.CHRONIC_HCC").cast("string").alias("CHRONIC_HCC"),
+        col("src.SUPPRESSION1_YN").cast("string").alias("SUPPRESSION1_YN"),
+        col("src.SUPPRESSED_BY_PARENT").cast("string").alias("SUPPRESSED_BY_PARENT"),
+        col("src.SUPPRESSION2_YN").cast("string").alias("SUPPRESSION2_YN"),
+        col("src.HOME_PLAN_ID_CD").cast("string").alias("HOME_PLAN_ID_CD"),
+        # New computed fields
+        col("FREQUENCY_OUT").alias("FREQUENCY"),
+        col("CONFIDENCE_FACTOR_OUT").alias("CONFIDENCE_FACTOR"),
+        col("src.CREATE_GAP").cast("string").alias("CREATE_GAP"),
+        col("src.CREATED_DATE"),
+        col("src.CREATED_BY"),
+        col("src.UPDATED_DATE") ,
+        col("src.UPDATED_BY")       
+    ).distinct()
+  
+    # Stage and insert
+    result_df.createOrReplaceTempView("staging_suspected_gaps")
+    logger.info(f"Started inserting into : {catalog}.{gap_schema_curation}.suspected_gaps")
+    spark.sql(f"""
+        INSERT INTO {catalog}.{gap_schema_curation}.suspected_gaps (
+            METHOD_ID, CLAIM_CD_TYPE, CLAIM_CD, CC_ID, PERCENT_WEIGHT, CC_DESCRIPTION,
+            SAS_MODEL_YEAR, SAS_MODEL_VERSION, CLAIM_CD_MODIFIER, CLAIM_CD_MODIFIER_TYPE,
+            EXCLUSION_1, EXCLUSION_2, EXCLUSION_TYPE_1, EXCLUSION_TYPE_2, QUALIFIED_CLAIM,
+            RISK_YEAR, CLAIM_BID, MEMBER_BID, CLM_PMT_STS_CD, CLM_TP_CD, TP_OF_BILL_CD,
+            CLAIM_DT, ALLWD_AMT, SOURCE_LOAD_MONTH, CLM_LN_NUM, CPT_AND_HCPCS_CD,
+            DIAG_TYPE_CD, DIAG_NUM, DIAG_CD, PRINC_PROC_CD, QUALIFY_CLAIMS,
+            INVALID_CPT_HCPCS, CODE, GAP_REASON, GAP_STATUS, MATCHED_CODE, MATCHED_DATE,
+            SCENARIO_TYPE, MODEL_VERSION, MATCHING_YN, CC_CODE, SUPPRESSION1_YN,
+            SUPPRESSED_BY_PARENT, SUPPRESSION2_YN, CREATE_GAP, HOME_PLAN_ID_CD,
+            FREQUENCY, CONFIDENCE_FACTOR, CREATED_DATE, CREATED_BY, UPDATED_DATE, UPDATED_BY
+        )
+        SELECT
+            s.METHOD_ID, s.CLAIM_CD_TYPE, s.CLAIM_CD, s.CC_ID, s.PERCENT_WEIGHT, s.CC_DESCRIPTION,
+            s.SAS_MODEL_YEAR, s.SAS_MODEL_VERSION, s.CLAIM_CD_MODIFIER, s.CLAIM_CD_MODIFIER_TYPE,
+            s.EXCLUSION_1, s.EXCLUSION_2, s.EXCLUSION_TYPE_1, s.EXCLUSION_TYPE_2, s.QUALIFIED_CLAIM,
+            s.RISK_YEAR, s.CLAIM_BID, s.MEMBER_BID, s.CLM_PMT_STS_CD, s.CLM_TP_CD, s.TP_OF_BILL_CD,
+            s.CLAIM_DT, s.ALLWD_AMT, s.SOURCE_LOAD_MONTH, s.CLM_LN_NUM, s.CPT_AND_HCPCS_CD,
+            s.DIAG_TYPE_CD, s.DIAG_NUM, s.DIAG_CD, s.PRINC_PROC_CD, s.QUALIFY_CLAIMS,
+            s.INVALID_CPT_HCPCS, s.CODE, s.GAP_REASON, s.GAP_STATUS, s.MATCHED_CODE, s.MATCHED_DATE,
+            s.SCENARIO_TYPE, s.MODEL_VERSION, s.MATCHING_YN, s.CC_CODE, s.SUPPRESSION1_YN,
+            s.SUPPRESSED_BY_PARENT, s.SUPPRESSION2_YN, s.CREATE_GAP, s.HOME_PLAN_ID_CD,
+            s.FREQUENCY, s.CONFIDENCE_FACTOR,
+            s.CREATED_DATE,s.CREATED_BY,s.UPDATED_DATE,s.UPDATED_BY
+        FROM staging_suspected_gaps s
+    """)
+ 
+    logger.info(f"Completed inserting into : {catalog}.{gap_schema_curation}.suspected_gaps")
+    return result_df
+
+def insert_risk_member_hcc_summary(spark, catalog: str, curated_schema: str, risk_member_hcc: DataFrame, dedupe_subset: List[str], logger):
+
+    drop_cols = ["CLAIM_TYPE", "CLAIM_BID", "CLAIM_DATE", "DIAG_CD"]
+    logger.info("Creating risk_member_hcc_summary by dropping columns and deduplicating")
+    logger.info(f"Input columns count: {len(risk_member_hcc.columns)}")
+
+    # Create summary dataframe: drop columns + dropDuplicates with key columns
+    df_risk_member_hcc_summary = (
+        risk_member_hcc
+        .drop(*drop_cols)
+        .dropDuplicates(subset=dedupe_subset)
+    )
+    df_risk_member_hcc_summary.write.insertInto(f"{catalog}.{curated_schema}.risk_member_hcc_summary", overwrite=False)
+    logger.info(f"Data appended to: {catalog}.{curated_schema}.risk_member_hcc_summary")
+    return df_risk_member_hcc_summary
+   
+def insert_interaction_coefficient_risk_member_hcc(
+    spark,
+    catalog: str,
+    schema_curation: str,
+    ma_reference: str,
+    source_load_year_month: str,
+    suspected_gaps_df: DataFrame,
+    audit_metadata: dict,
+    logger
+):
+    """
+    Creates and inserts HCC disease interaction coefficient records
+    into risk_member_hcc table.
+    """
+
+    logger.info("Starting insert_interaction_coefficient_risk_member_hcc")
+
+    # Step 1: Load reference interaction scores
+    df_ref_interaction_scores = (
+        spark.table(f"{catalog}.{ma_reference}.ref_interaction_scores")
+        .select(
+            F.col("SAS_MODEL_VERSION").alias("sas_model_version"),
+            F.col("RISK_MODEL_SEGMENT").alias("risk_model_segment"),
+            F.least(F.col("INTERACTION_HCC1"), F.col("INTERACTION_HCC2")).alias("hcc_code_1"),
+            F.greatest(F.col("INTERACTION_HCC1"), F.col("INTERACTION_HCC2")).alias("hcc_code_2"),
+            F.col("INTERACTION_NAME").alias("interaction_name"),
+            F.col("INTERACTION_DESC").alias("interaction_desc"),
+            F.col("SCORE").alias("interaction_score"),
+        )
+        .dropDuplicates(["sas_model_version", "risk_model_segment", "hcc_code_1", "hcc_code_2"])
+    )
+
+    # Step 2: Load retained HCCs from claims / supplemental
+    df_interaction_claim_draft = (
+        spark.table(f"{catalog}.{schema_curation}.risk_member_hcc")
+        .filter(
+            (F.col("SUPPRESSION_IND") == "R") &
+            (F.col("DX_SOURCE").isin(["claim", "supplemental"])) &
+            (F.col("RISK_TYPE_ID") == "HCC") &
+            (F.col("CYCLE_RUN") == source_load_year_month)
+        )
+    )
+    # Step 2a: Filter suspected gaps to only include relevant records
+    suspected_gaps_filtered = suspected_gaps_df.filter(
+        (F.col("SUPPRESSION_IND") == "R") &
+        (F.col("GAP_STATUS") == "Open Suspect")
+    )
+    # Step 2b: Keep only members present in BOTH dataframes
+    member_intersection_df = (
+        suspected_gaps_filtered.select(
+            "MEMBER_BID", "RISK_YEAR", "SAS_MODEL_VERSION", "CYCLE_RUN"
+        ).distinct()
+        .join(
+            df_interaction_claim_draft.select(
+                "MEMBER_BID", "RISK_YEAR", "SAS_MODEL_VERSION", "CYCLE_RUN"
+            ).distinct(),
+            on=["MEMBER_BID", "RISK_YEAR", "SAS_MODEL_VERSION", "CYCLE_RUN"],
+            how="inner"
+        )
+    )
+    
+    # Use semi-join to filter without adding duplicate columns
+    suspected_gaps_valid = suspected_gaps_filtered.join(
+        member_intersection_df,
+        ["MEMBER_BID", "RISK_YEAR", "SAS_MODEL_VERSION", "CYCLE_RUN"],
+        "left_semi"
+    )
+
+    claims_valid = df_interaction_claim_draft.join(
+        member_intersection_df,
+        ["MEMBER_BID", "RISK_YEAR", "SAS_MODEL_VERSION", "CYCLE_RUN"],
+        "left_semi"
+    )
+    
+    # Step 2c: Union validated datasets
+    df_re_gs_union = suspected_gaps_valid.unionByName(claims_valid, allowMissingColumns=True)
+
+    # Step 2d: Prepare retained HCC dataframe
+    df_re_gs_union_retained_hcc_df = (
+        df_re_gs_union
+        .withColumn("hcc_code", F.col("RISK_TYPE_DETAIL_ID"))
+        .select(
+            F.col("MEMBER_BID").alias("member_bid"),
+            F.col("HOME_PLAN_ID_CD").alias("home_plan_id_cd"),
+            F.col("RISK_MODEL_YEAR").alias("risk_model_year"),
+            F.col("RISK_MODEL_TYPE").alias("risk_model_type"),
+            F.col("RISK_MODEL_VERSION").alias("risk_model_version"),
+            F.col("RISK_YEAR").alias("risk_year"),
+            F.col("SAS_MODEL_VERSION").alias("sas_model_version"),
+            F.col("RISK_MODEL_SEGMENT").alias("risk_model_segment"),
+            F.col("MEMBER_GENDER").alias("member_gender"),
+            F.col("MEMBER_AGE").alias("member_age"),
+            F.col("CYCLE_RUN").alias("cycle_run"),
+            F.col("hcc_code"),
+        )
+        .na.drop()
+        .dropDuplicates([
+            "member_bid", "risk_year", "sas_model_version", "risk_model_segment", "cycle_run", "hcc_code"
+        ])
+    )
+
+    # HCC Count Payment
+    payment_df = create_hcc_count_payment_df(
+        df=df_re_gs_union_retained_hcc_df,
+        catalog=catalog,
+        ma_reference=ma_reference,
+        spark=spark,
+        logger=logger,
+        audit_metadata=audit_metadata
+    )
+    
+    # Step 3: Generate HCC pairs
+    logger.info("Generate HCC pairs started")
+    left_hcc_df = df_re_gs_union_retained_hcc_df.alias("l")
+    right_hcc_df = df_re_gs_union_retained_hcc_df.alias("r")
+
+    hcc_pair_df = (
+        left_hcc_df.join(
+            right_hcc_df,
+            (
+                (F.col("l.member_bid") == F.col("r.member_bid")) &
+                (F.col("l.risk_year") == F.col("r.risk_year")) &
+                (F.col("l.sas_model_version") == F.col("r.sas_model_version")) &
+                (F.col("l.risk_model_segment") == F.col("r.risk_model_segment")) &
+                (F.col("l.cycle_run") == F.col("r.cycle_run")) &
+                (F.col("l.hcc_code") < F.col("r.hcc_code"))
+            ),
+            "inner"
+        )
+        .select(
+            F.col("l.member_bid"),
+            F.col("l.home_plan_id_cd"),
+            F.col("l.risk_model_year"),
+            F.col("l.risk_model_type"),
+            F.col("l.risk_model_version"),
+            F.col("l.risk_year"),
+            F.col("l.sas_model_version"),
+            F.col("l.risk_model_segment"),
+            F.col("l.member_gender"),
+            F.col("l.member_age"),
+            F.col("l.cycle_run"),
+            F.col("l.hcc_code").alias("hcc_code_1"),
+            F.col("r.hcc_code").alias("hcc_code_2"),
+        )
+    )
+    logger.info("Generate HCC pairs completed")
+    # Step 4: Match valid interactions
+    logger.info("Match valid interactions started")
+    matched_interactions_df = hcc_pair_df.join(
+        df_ref_interaction_scores,
+        ["sas_model_version", "risk_model_segment", "hcc_code_1", "hcc_code_2"],
+        "inner"
+    )
+    logger.info("Match valid interactions completed")
+
+    # Step 5: Dedupe to ONE row per valid interaction pair
+    logger.info("Deduplicating to one row per interaction started")
+    matched_interactions_df = matched_interactions_df.dropDuplicates([
+        "member_bid", "risk_year", "sas_model_version", "cycle_run", "interaction_name"
+    ])
+    logger.info("Deduplicating to one row per interaction completed")
+
+    # Step 6: Exclude existing DISEASE INTERACTION records
+    logger.info("Checking for existing DISEASE INTERACTION records started")
+    existing_interactions_df = (
+        spark.table(f"{catalog}.{schema_curation}.risk_member_hcc")
+        .filter(
+            (F.col("RISK_TYPE_ID") == "DISEASE INTERACTION") &
+            (F.col("CYCLE_RUN") == source_load_year_month)
+        )
+        .select(
+            F.col("MEMBER_BID").alias("member_bid"),
+            F.col("RISK_YEAR").alias("risk_year"),
+            F.col("SAS_MODEL_VERSION").alias("sas_model_version"),
+            F.col("CYCLE_RUN").alias("cycle_run"),
+            F.col("RISK_TYPE_DETAIL_ID").alias("interaction_name")
+        )
+        .distinct()
+    )
+
+    # Anti-join to remove already existing interactions
+    matched_interactions_df = matched_interactions_df.join(
+        existing_interactions_df,
+        ["member_bid", "risk_year", "sas_model_version", "cycle_run", "interaction_name"],
+        "left_anti"
+    )
+    logger.info("Checking for existing DISEASE INTERACTION records completed")
+
+    # Step 7: Apply adjustment factors
+    logger.info("Apply adjustment factors started")
+    adjustment_factor_df = (
+        spark.table(f"{catalog}.{ma_reference}.adjustment_factors")
+        .filter(~F.col("MODEL").startswith("cms_hcc_esrd"))
+    )
+
+    interaction_with_adjustment_df = (
+        matched_interactions_df.join(
+            adjustment_factor_df,
+            (
+                (F.lower(F.col("risk_model_version")) == F.lower(F.col("VERSION"))) &
+                (F.lower(F.col("risk_model_type")) == F.lower(F.col("MODEL")))
+            ),
+            "inner"
+        )
+        .withColumn(
+            "ADJ_COEFF_SCORE",
+            F.round(
+                (F.col("interaction_score") / F.col("NORMALIZATION_FACTOR")) *
+                (1 - F.coalesce(F.col("CODING_PATTERN_ADJUSTMENT"), F.lit(0))),
+                3
+            )
+        )
+    )
+    logger.info("Apply adjustment factors completed")
+    # Step 8: Final dataframe
+    logger.info("Final dataframe creation started")
+    final_interaction_df = interaction_with_adjustment_df.select(
+        F.col("member_bid").alias("MEMBER_BID"),
+        F.col("home_plan_id_cd").alias("HOME_PLAN_ID_CD"),
+        F.col("risk_model_year").alias("RISK_MODEL_YEAR"),
+        F.col("risk_model_type").alias("RISK_MODEL_TYPE"),
+        F.col("risk_model_version").alias("RISK_MODEL_VERSION"), 
+        F.col("risk_model_segment").alias("RISK_MODEL_SEGMENT"),
+        F.col("sas_model_version").alias("SAS_MODEL_VERSION"),
+        F.col("member_gender").alias("MEMBER_GENDER"),
+        F.col("member_age").alias("MEMBER_AGE"),
+        F.lit("DISEASE INTERACTION").alias("RISK_TYPE_ID"),
+        F.col("interaction_name").alias("RISK_TYPE_DETAIL_ID"),
+        F.col("interaction_desc").alias("RISK_TYPE_DETAIL_DESC"),
+        F.lit("R").alias("SUPPRESSION_IND"),
+        F.lit(None).cast("smallint").alias("METHOD_ID"),
+        F.col("ADJ_COEFF_SCORE").cast("double"),
+        F.col("interaction_score").alias("COEFF_SCORE"),
+        F.lit(None).cast("double").alias("METHOD_CONFIDENCE_FACTOR"),
+        F.lit(None).cast("double").alias("COMBINED_CONFIDENCE_FACTOR"),
+        F.lit(None).cast("string").alias("CHRONIC_HCC"),
+        F.lit("suspected_gap").alias("DX_SOURCE"),
+        F.lit("Open Suspect").alias("GAP_STATUS"),
+        F.lit(None).cast("string").alias("CLAIM_TYPE"),
+        F.lit(None).cast("long").alias("CLAIM_BID"),
+        F.lit(None).cast("date").alias("CLAIM_DATE"),
+        F.lit(None).cast("string").alias("DIAG_CD"),
+        F.col("risk_year").alias("RISK_YEAR"),
+        F.lit(None).cast("string").alias("HRA"),
+        F.lit(None).cast("string").alias("HOME_HRA"),
+        F.col("cycle_run").alias("CYCLE_RUN"),
+        F.lit(None).cast("string").alias("ACTIVE_IND"),
+        F.lit(audit_metadata['created_date']).cast("timestamp").alias("CREATED_DATE"),
+        F.lit(audit_metadata['created_by']).alias("CREATED_BY"),
+        F.lit(audit_metadata['updated_date']).cast("timestamp").alias("UPDATED_DATE"),
+        F.lit(audit_metadata['updated_by']).alias("UPDATED_BY")
+    )
+    logger.info("Final dataframe creation completed")
+    # Step 9: Insert into risk_member_hcc
+    logger.info("Insert into risk_member_hcc started")
+    final_df = final_interaction_df.unionByName(payment_df)
+
+    final_df.write.insertInto(
+        f"{catalog}.{schema_curation}.risk_member_hcc",
+        overwrite=False
+    )
+
+    logger.info("Inserted interaction coefficient and payment count records successfully")
+    return final_df
+
+def create_hcc_count_payment_df(
+    df: DataFrame,
+    catalog: str,
+    ma_reference: str,
+    spark,
+    logger,
+    audit_metadata: dict
+) -> DataFrame:
+    """
+    Creates HCC count payment DataFrame by aggregating HCC counts per member,
+    generating payment codes, and joining with coefficient scores.
+
+    Args:
+        df (DataFrame): Input DataFrame containing member and HCC data with columns:
+            - MEMBER_BID, HOME_PLAN_ID_CD, RISK_MODEL_YEAR, RISK_MODEL_TYPE,
+            - RISK_MODEL_VERSION, RISK_MODEL_SEGMENT, SAS_MODEL_VERSION,
+            - MEMBER_GENDER, MEMBER_AGE, RISK_YEAR, CYCLE_RUN, HCC_CODE
+        catalog (str): Catalog name for coefficient_scores table
+        ma_reference (str): Schema name for coefficient_scores table
+        spark: SparkSession instance
+
+    Returns:
+        DataFrame: Payment DataFrame with standardized columns for union, including:
+            - Member identifiers and demographics
+            - RISK_TYPE_ID = "HCC COUNT PAYMENT"
+            - RISK_TYPE_DETAIL_ID = payment code (e.g., "CNA_D5", "CNA_D10P")
+            - ADJ_COEFF_SCORE and COEFF_SCORE from coefficient table
+            - Audit columns (CREATED_DATE, CREATED_BY, etc.)
+
+    Raises:
+        Exception: If aggregation or join operations fail
+    """
+    try:
+        logger.info("Starting HCC count payment DataFrame creation")
+        # account_name = spark.sql("SELECT current_user()").collect()[0][0]
+        
+        # Step 1: Aggregate HCC counts by member
+        result_df = df.groupBy(
+            "MEMBER_BID",
+            "HOME_PLAN_ID_CD",
+            "RISK_MODEL_YEAR",
+            "RISK_MODEL_TYPE",
+            "RISK_MODEL_VERSION",
+            "RISK_MODEL_SEGMENT",
+            "SAS_MODEL_VERSION",
+            "MEMBER_GENDER",
+            "MEMBER_AGE",
+            "RISK_YEAR",
+            "CYCLE_RUN"
+        ).agg(
+            F.countDistinct("HCC_CODE").alias("HCC_COUNT")
+        ).withColumn(
+            "HCC_COUNT_PAYMENT",
+            F.when(
+                F.col("HCC_COUNT") >= 10,
+                F.concat(F.col("RISK_MODEL_SEGMENT"), F.lit("_D10P"))
+            ).otherwise(
+                F.concat(F.col("RISK_MODEL_SEGMENT"), F.lit("_D"), F.col("HCC_COUNT"))
+            )
+        )
+        
+        logger.info(f"Aggregated HCC counts for {result_df.count()} members")
+        
+        # Step 2: Load coefficient scores table
+        coefficient_scores = spark.table(f"{catalog}.{ma_reference}.coefficient_scores")
+        logger.info("Loaded coefficient_scores table")
+        
+        # Step 3: Join with coefficient scores to get payment scores
+        payment_df = result_df.alias("result").join(
+            F.broadcast(coefficient_scores.alias("coeff")),
+            (
+                (F.lower(F.col("result.RISK_MODEL_VERSION")) == F.lower(F.col("coeff.VERSION"))) &
+                (F.lower(F.col("result.RISK_MODEL_TYPE")) == F.lower(F.col("coeff.MODEL"))) &
+                (F.lower(F.col("result.HCC_COUNT_PAYMENT")) == F.lower(F.col("coeff.NAME")))
+            ),
+            how="left"
+        ).select(
+            F.col("result.MEMBER_BID").alias("MEMBER_BID"),
+            F.col("result.HOME_PLAN_ID_CD").alias("HOME_PLAN_ID_CD"),
+            F.col("result.RISK_MODEL_YEAR").alias("RISK_MODEL_YEAR"),
+            F.col("result.RISK_MODEL_TYPE").alias("RISK_MODEL_TYPE"),
+            F.col("result.RISK_MODEL_VERSION").alias("RISK_MODEL_VERSION"),
+            F.col("result.RISK_MODEL_SEGMENT").alias("RISK_MODEL_SEGMENT"),
+            F.col("result.SAS_MODEL_VERSION").alias("SAS_MODEL_VERSION"),
+            F.col("result.MEMBER_GENDER").alias("MEMBER_GENDER"),
+            F.col("result.MEMBER_AGE").alias("MEMBER_AGE"),
+            F.lit("HCC COUNT PAYMENT").alias("RISK_TYPE_ID"),
+            F.col("result.HCC_COUNT_PAYMENT").alias("RISK_TYPE_DETAIL_ID"),
+            F.coalesce(
+                F.col("coeff.DESCRIPTION"),
+                F.lit("HCC Count Payment")
+            ).alias("RISK_TYPE_DETAIL_DESC"),
+            F.lit("R").alias("SUPPRESSION_IND"),
+            F.lit(None).cast("smallint").alias("METHOD_ID"),
+            F.lit(None).cast("double").alias("ADJ_COEFF_SCORE"),
+            F.coalesce(F.col("coeff.SCORE"), F.lit(0.0)).cast("double").alias("COEFF_SCORE"),
+            F.lit(None).cast("double").alias("METHOD_CONFIDENCE_FACTOR"),
+            F.lit(None).cast("double").alias("COMBINED_CONFIDENCE_FACTOR"),
+            F.lit(None).cast("string").alias("CHRONIC_HCC"),
+            F.lit("suspected_gap").alias("DX_SOURCE"),
+            F.lit("Open Suspect").alias("GAP_STATUS"),
+            F.lit(None).cast("string").alias("CLAIM_TYPE"),
+            F.lit(None).cast("long").alias("CLAIM_BID"),
+            F.lit(None).cast("date").alias("CLAIM_DATE"),
+            F.lit(None).cast("string").alias("DIAG_CD"),
+            F.col("result.RISK_YEAR").alias("RISK_YEAR"),
+            F.lit(None).cast("string").alias("HRA"),
+            F.lit(None).cast("string").alias("HOME_HRA"),
+            F.col("result.CYCLE_RUN").alias("CYCLE_RUN"),
+            F.lit(None).cast("string").alias("ACTIVE_IND"),
+            F.lit(audit_metadata['created_date']).cast("timestamp").alias("CREATED_DATE"),
+            F.lit(audit_metadata['created_by']).alias("CREATED_BY"),
+            F.lit(audit_metadata['updated_date']).cast("timestamp").alias("UPDATED_DATE"),
+            F.lit(audit_metadata['updated_by']).alias("UPDATED_BY"),
+        )
+        return payment_df
+        
+    except Exception as e:
+        logger.error(f"Error in create_hcc_count_payment_df: {str(e)}")
+        raise Exception(f"Failed to create HCC count payment DataFrame: {str(e)}")
+ 
