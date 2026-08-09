@@ -144,3 +144,34 @@ else:
     logger.info(
         "Skipping ingestion volume folder setup because plan_name is empty."
     )
+
+# COMMAND ----------
+
+# DBTITLE 1, Execute DDL to Create Tables
+
+from src.spark.helpers.generic_util import config_plan_setup
+
+logger.info("Starting table creation with DDL execution...")
+
+config_plan_setup(
+    spark=spark,
+    catalog=catalog,
+    ref_schema=ref_schema,
+    gap_schema_curation=gap_schema_curation,
+    schema_curation=schema_curation,
+    schema_transformation=schema_transformation,
+    env_bucket=env_bucket,
+    schema_ingestion=schema_ingestion,
+    schema_monitoring=schema_monitoring,
+    v_schema_plan_name=v_schema_plan_name,
+    ma_dashboard_ref_schema="ma_dashboard_reference",
+    sam_ref_schema=sam_ref_schema,
+    sam_stage_schema=sam_stage_schema,
+    sam_work_schema=sam_work_schema,
+    sam_result_schema=sam_result_schema,
+    schema_curation_supp=schema_curation_supp,
+    gap_schema_curation_supp=gap_schema_curation_supp,
+    schema_list=schema_list
+)
+
+logger.info("✓ Table creation completed successfully!")
