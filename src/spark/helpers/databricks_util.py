@@ -1,7 +1,9 @@
 """Databricks Utilities - Comprehensive helper functions for Spark/Databricks operations."""
 
-import s3fs
+import ast
+import boto3
 from delta.tables import DeltaTable
+from src.spark.helpers.logger_util import get_logger
 from pyspark.sql.types import StructType
 from pyspark.sql.window import Window
 from pyspark.sql import SparkSession, DataFrame, Column
@@ -10,6 +12,61 @@ from typing import Union, List, Optional, Tuple
 from pyspark.sql.types import StructType
 
 logger = get_logger()
+
+
+def get_path_plan_name(plan_name: str) -> str:
+    """
+    Returns the schema prefix based on the plan_name.
+    If the plan name is 'non_anthem', returns an empty string."""  
+    return "" if plan_name =="non_anthem" else  plan_name+"-"
+
+def get_plan_name(plan_name: str) -> str:
+    """
+    Returns the schema prefix based on the plan_name.
+    If the plan name is 'non_anthem', returns an empty string."""  
+    return "" if plan_name =="non_anthem" else  plan_name+"_"
+
+def get_curation_schema(plan_name: str, incl_supplemental_mmr: str, incl_pseudo_claim: str = "N") -> str:
+    """Resolves the curation schema for a scoring run, segregating supplemental from non-supplemental output.
+    
+    Non-supplemental runs write to (plan_name)_curation (unchanged behavior).
+    Supplemental runs write to (plan_name)_curation_supp so the two run types are physically isolated.
+    Supplemental has two feeds - MMR supplemental (incl_supplemental_mmr) and MAO pseudo-claims (incl_pseudo_claim) -
+    and a run is treated as supplemental when EITHER flag is "Y".
+    This is the single decision point for supplemental vs non-supplemental output routing.
+    For non_anthem the prefix is empty, yielding "curation" or "curation_supp".
+    
+    Args:
+        plan_name (str): The plan name (e.g. "uatplan1", "non_anthem").
+        incl_supplemental_mmr (str): MMR supplemental run flag, "Y" for supplemental.
+        incl_pseudo_claim (str): MAO pseudo-claim run flag, "Y" for supplemental.
+            Defaults to "N" so callers that do not segregate on pseudo-claims keep their existing behavior.
+    
+    Returns:
+        str: The resolved curation schema name.
+    """
+    v_plan_name = get_pla_name(plan_name)
+    is_supp = (str(incl_supplemental_mmr).upper() == "Y" or str(incl_pseudo_claim).upper() == "Y")
+    suffix = "curation_supp" if is_supp else "curation"
+    return v_plan_name + suffix
+
+def get_gap_curation_schema(plan_name: str, incl_supplemental_mmr: str) -> str:
+    """Resolves the gap curation schema for a scoring/gap run, mirroring get_curation_schema for supplemental segregation.
+    
+    Non-supplemental runs use (plan_name)_gap_curation (unchanged).
+    Supplemental runs use (plan_name)_gap_curation_supp.
+    
+    Args:
+        plan_name (str): The plan name (e.g. "uatplan1", "non_anthem").
+        incl_supplemental_mmr (str): Run type flag, "Y" for supplemental.
+    
+    Returns:
+        str: The resolved gap curation schema name.
+    """
+    v_plan_name = get_pla_name(plan_name)
+    suffix = "gap_curation_supp" if str(incl_supplemental_mmr).upper() == "Y" else "gap_curation"
+    return v_plan_name + suffix
+
 
 def get_dict_value(dict, key):
     """Returns values for the input key of a string format dict."""
@@ -43,13 +100,16 @@ def load_csv(
         Exception: If error loading CSV file [path].
     """
     try:
-        return (
+        df = (
             spark.read.format("csv")
             .option("header", header)
             .option("delimiter", delimiter)
             .schema(schema)
             .load(path)
         )
+        # Force schema validation on Spark Connect (lazy evaluation)
+        df.schema
+        return df
     except Exception as e:
         logger.error(f"Error loading CSV file [path]: {e}")
         raise Exception(f"Failed to load CSV file [path]: {e}")
@@ -78,13 +138,16 @@ def load_txt(
         Exception: If error loading text file [path].
     """
     try:
-        return (
+        df = (
             spark.read.format("csv")
             .option("header", header)
             .option("delimiter", delimiter)
             .schema(schema)
             .load(path)
         )
+        # Force schema validation on Spark Connect (lazy evaluation)
+        df.schema
+        return df
     except Exception as e:
         logger.error(f"Error loading text file [path]: {e}")
         raise Exception(f"Failed to load text file [path]: {e}")
@@ -117,8 +180,10 @@ def read_table(
     """
     full_table_name = f"[{schema}].[{table_name}]"
     try:
-        # Check if table exists
-        if not spark.catalog.tableExists(full_table_name):
+        # Check if table exists (SQL-based, works on Serverless)
+        try:
+            spark.sql(f"DESCRIBE TABLE {full_table_name}")
+        except Exception:
             raise Exception(f"Table [{full_table_name}] does not exist.")
 
         # Read the table
@@ -130,7 +195,9 @@ def read_table(
 
         # Select columns if provided
         if columns:
-            missing_cols = [col_name for col_name in columns if col_name not in df.columns]
+            # Cache df.columns to avoid repeated Analyze RPCs on Spark Connect
+            df_columns = set(df.columns)
+            missing_cols = [col_name for col_name in columns if col_name not in df_columns]
             if missing_cols:
                 raise Exception(f"Columns {missing_cols} not found in table [{full_table_name}].")
             df = df.select(*columns)
@@ -271,14 +338,13 @@ def merge_table(
         raise Exception(f"Failed to merge into table [{schema}].[{table_name}]: {e}") from e
 
 def clean_up(df: DataFrame):
-    """Unpersist data frame."""
-    try:
-        if df.rdd.isparallelized(True):
-            df.unpersist(blocking=True)
-            logger.info("Data frame successfully unpersisted")
-    except Exception as e:
-        logger.error(f"Error unpersisting data frame: {e}")
-        raise RuntimeError(f"Failed to unpersist data frame: {e}") from e
+    """Cache management placeholder - Serverless compute handles caching automatically.
+    
+    Note: df.unpersist() and df.rdd are not supported on Serverless compute.
+    Caching is managed automatically by the platform.
+    """
+    logger.info("Cache management is automatic on Serverless compute")
+    pass
 
 def create_merge_condition(merge_keys):
     """
@@ -369,7 +435,15 @@ def create_or_upsert_data_table(
     """
     full_table_name = f"[{schema_name}].[{table_name}]"
     try:
-        if spark.catalog.tableExists(full_table_name):
+        # Check if table exists (SQL-based, works on Serverless)
+        table_exists = False
+        try:
+            spark.sql(f"DESCRIBE TABLE {full_table_name}")
+            table_exists = True
+        except Exception:
+            pass
+        
+        if table_exists:
             logger.info(f"Table '{full_table_name}' already exists.")
             if merge_condition:
                 upsert_catalog(spark, schema_name, table_name, merge_condition, df)
@@ -432,9 +506,11 @@ def upsert_delta_update_columns(spark, new_data_df, table_name: str, schema: str
         delta_table = DeltaTable.forPath(spark, full_table_path)
 
         # Build update set: exclude created_by and created_date
+        # Cache columns to avoid repeated Analyze RPCs on Spark Connect
+        df_columns = new_data_df.columns
         update_set = {
             col_name: f"source.[{col_name}]"
-            for col_name in new_data_df.columns
+            for col_name in df_columns
             if col_name.lower() not in ["created_by", "created_date"]
         }
 
@@ -590,9 +666,11 @@ def table_exists(spark, catalog: str, schema: str, table: str) -> bool:
     """
     full_table_name = f"[{catalog}].[{schema}].[{table}]"
     try:
-        return spark.catalog.tableExists(full_table_name)
+        # Use SQL-based check (works on Serverless, spark.catalog not supported)
+        spark.sql(f"DESCRIBE TABLE {full_table_name}")
+        return True
     except Exception as e:
-        logger.error(f"Error checking table existence for {full_table_name}: {str(e)}")
+        logger.debug(f"Table {full_table_name} does not exist: {str(e)}")
         return False
 
 def drop_table_if_exists(spark, catalog: str, schema: str, table: str) -> bool:

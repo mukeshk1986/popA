@@ -1,4 +1,11 @@
 # Databricks notebook source
+import sys
+sys.dont_write_bytecode = True
+
+repo_root = "/Workspace/Repos/DEV/popA"
+if repo_root not in sys.path:
+    sys.path.insert(0, repo_root)
+
 from src.spark.helpers.logger_util import get_logger
 from src.spark.helpers.databricks_util import get_plan_name, get_path_plan_name
 from src.spark.helpers.generic_util import ingestion_folder_check
