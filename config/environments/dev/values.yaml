@@ -1,0 +1,42 @@
+s3:
+  buckets:
+    bronze: bhi-pop-dev-datalake-bronze-us-east-1
+    silver: bhi-pop-dev-datalake-silver-us-east-1
+    gold: bhi-pop-dev-datalake-gold-us-east-1
+  arn: "arn:aws:iam::733275446440:instance-profile/POP-DEV_Databricks-Instance_role"
+
+airflow:
+  source: "WORKSPACE"
+  databricks_instance: dbc-adc284cf-52b2.cloud.databricks.com
+  jobs_api_url: api/2.1/jobs/get-output?run_id=
+  permissions_api_url: api/2.0/preview/permissions/jobs
+  version: 2.0
+  aws_region: us-east-1
+  databricks_secret_name: sa-ci-pop-dev
+  databricks_repository: EMIDS-Population-Advyzer
+  databricks_conn_id: "databricks_conn_service_account"
+  databricks_users_group:
+  - DataBricks_POP-DEV_DataEngineer_EMIDS
+  - DataBricks_POP-DEV_DataEngineer
+
+env: DEV
+
+email_alerts:
+  emails: 'PopA_Mon-prod_Support@bluehealthintelligence.com'
+  smtp_server: 'smtp.bluehealthintelligence.com'
+  sender: 'POP-DEV_Airflow_2-10-38bluehealthintelligence.com'
+
+catalog: pop_dev
+delta_share_catalog: bhi_meddsupp_data_dev_01
+config_schema: ma_reference
+target_score_table_mode: append
+target_table: risk_member_output
+notebook_time_out: 180
+
+custom_tags:
+  tenant: bhi
+  pod: government-programs
+  project: government-programs
+  billingcode: POP-DEV
+  billable: FALSE
+  service: Code Development

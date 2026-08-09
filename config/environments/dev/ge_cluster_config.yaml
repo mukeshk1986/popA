@@ -1,0 +1,34 @@
+autoscale:
+  min_workers: 1
+  max_workers: 10
+aws_attributes:
+  availability: ON_DEMAND
+  zone_id: auto
+  data_security_mode: SINGLE_USER
+  node_type_id: i3dn.4xlarge
+  driver_node_type_id: i3dn.2xlarge
+  runtime_engine: STANDARD
+  enable_elastic_disk: false
+  init_scripts:
+  - workspace:
+      destination: /Repos/DEV/EMIDS-Population-Advyzer/scripts/init-cluster.sh
+  - workspace:
+      destination: /Repos/DEV/EMIDS-Population-Advyzer/scripts/init-ge-cluster.sh
+  cluster_log_conf:
+    dbfs:
+      destination: dbfs:/cluster-logs
+  spark_conf:
+    spark.shuffle.io.maxRetries: 5
+    spark.shuffle.io.retryWait: 60s
+    spark.shuffle.compress: 'true'
+    spark.driver.extraJavaOptions: -Xss4m
+    spark.executor.extraJavaOptions: -Xss4m
+    spark.sql.codegen.wholeStage: false
+    spark.sql.adaptive.enabled: true
+    spark.sql.adaptive.coalescePartitions.enabled: true
+    spark.sql.adaptive.skewJoin.enabled: true
+  spark_env_vars:
+    PYSPARK_PYTHON: /databricks/python3/bin/python3
+    spark_version: 15.4.x-scala2.12
+    ssh_public_keys: []
+    custom_tags: {}

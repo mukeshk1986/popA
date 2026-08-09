@@ -1,0 +1,1143 @@
+# MA Supplemental File Layout Configuration
+# Detailed field layout specifications for Medicare Advantage (MA) supplemental files
+# This configuration defines the structure, column positions, and field mappings
+# for MAO_004 and MMR supplemental data files
+
+# ================================
+# MAO_004 File Configuration
+# ================================
+# Medicare Advantage Encounter (MAO) supplemental file structure
+
+files:
+  MAO_004:
+    description: "Medicare Advantage Encounter supplemental file"
+    file_type: "MAO_004"
+    parse_function: "parse_mao_004_files"
+    target_tables:
+      - "medicare_mao_header"
+      - "medicare_mao"
+      - "medicare_mao_trailer"
+
+    # ================================
+    # MAO Header Record Layout
+    # ================================
+    tables:
+      medicare_mao_header:
+        description: "MAO file header record"
+        record_type: "H"
+        identifier:
+          columns:
+            - name: "RECORD_TYPE"
+              start: 0
+              end: 1
+              description: "Record type indicator (H = Header)"
+
+        columns:
+          - name: "RECORD_TYPE"
+            start: 0
+            end: 1
+            type: "string"
+            description: "Record type indicator"
+
+          - name: "REPORT_ID"
+            start: 1
+            end: 9
+            type: "string"
+            description: "Report identifier"
+
+          - name: "CONTRACT_ID"
+            start: 9
+            end: 15
+            type: "string"
+            description: "Medicare contract ID"
+
+          - name: "REPORT_DATE"
+            start: 15
+            end: 23
+            type: "date"
+            description: "Report date (YYYYMMDD)"
+
+          - name: "REPORT_DESC"
+            start: 23
+            end: 33
+            type: "string"
+            description: "Report description"
+
+          - name: "SUB_FILE_TYPE"
+            start: 110
+            end: 114
+            type: "string"
+            description: "Submitter file type"
+
+          - name: "PHASE"
+            start: 114
+            end: 116
+            type: "string"
+            description: "File transmission phase"
+
+          - name: "VERSION"
+            start: 116
+            end: 118
+            type: "integer"
+            description: "File format version"
+
+      # ================================
+      # MAO Detail Record Layout
+      # ================================
+      medicare_mao:
+        description: "MAO encounter detail record"
+        record_type: "D"
+        identifier:
+          columns:
+            - name: "RECORD_TYPE"
+              start: 0
+              end: 1
+            - name: "REPORT_ID"
+              start: 1
+              end: 9
+            - name: "CONTRACT_ID"
+              start: 9
+              end: 15
+            - name: "MBI"
+              start: 15
+              end: 26
+
+        columns:
+          - name: "RECORD_TYPE"
+            start: 0
+            end: 1
+            type: "string"
+
+          - name: "REPORT_ID"
+            start: 1
+            end: 9
+            type: "string"
+
+          - name: "CONTRACT_ID"
+            start: 9
+            end: 15
+            type: "string"
+
+          - name: "MBI"
+            start: 15
+            end: 26
+            type: "string"
+            description: "Medicare Beneficiary Identifier"
+
+          - name: "ICN"
+            start: 26
+            end: 43
+            type: "string"
+            description: "Internal Control Number"
+
+          - name: "ENCOUNTER_TYPE"
+            start: 43
+            end: 45
+            type: "string"
+            description: "Encounter type code"
+
+          - name: "ENCOUNTER_ICN"
+            start: 45
+            end: 60
+            type: "string"
+            description: "Encounter Internal Control Number"
+
+          - name: "ALLOWED_STATUS"
+            start: 60
+            end: 61
+            type: "string"
+            description: "Allowed/Disallowed status"
+
+          - name: "SUBMIT_DATE"
+            start: 61
+            end: 69
+            type: "date"
+            description: "Submission date"
+
+          - name: "DOS_FROM"
+            start: 69
+            end: 77
+            type: "date"
+            description: "Date of service from"
+
+          - name: "DOS_THRU"
+            start: 77
+            end: 85
+            type: "date"
+            description: "Date of service through"
+
+          - name: "SERVICE_TYPE"
+            start: 85
+            end: 87
+            type: "string"
+            description: "Service type code"
+
+          - name: "ALLOWED_FLAG"
+            start: 87
+            end: 88
+            type: "string"
+            description: "Allowed/Denied flag"
+
+          - name: "REASON_CODE"
+            start: 88
+            end: 91
+            type: "string"
+            description: "Denial reason code"
+
+          - name: "ICD_TYPE"
+            start: 91
+            end: 93
+            type: "string"
+            description: "ICD diagnosis type (09, 10)"
+
+          # ================================
+          # Diagnosis Codes and Flags (01-38)
+          # ================================
+          - name: "DIAG_CODE_01"
+            start: 93
+            end: 100
+            type: "string"
+            description: "Diagnosis code 01"
+
+          - name: "DIAG_FLAG_01"
+            start: 100
+            end: 101
+            type: "string"
+            description: "Diagnosis flag 01"
+
+          - name: "DIAG_CODE_02"
+            start: 101
+            end: 108
+            type: "string"
+
+          - name: "DIAG_FLAG_02"
+            start: 108
+            end: 109
+            type: "string"
+
+          - name: "DIAG_CODE_03"
+            start: 109
+            end: 116
+            type: "string"
+
+          - name: "DIAG_FLAG_03"
+            start: 116
+            end: 117
+            type: "string"
+
+          - name: "DIAG_CODE_04"
+            start: 117
+            end: 124
+            type: "string"
+
+          - name: "DIAG_FLAG_04"
+            start: 124
+            end: 125
+            type: "string"
+
+          - name: "DIAG_CODE_05"
+            start: 125
+            end: 132
+            type: "string"
+
+          - name: "DIAG_FLAG_05"
+            start: 132
+            end: 133
+            type: "string"
+
+          - name: "DIAG_CODE_06"
+            start: 133
+            end: 140
+            type: "string"
+
+          - name: "DIAG_FLAG_06"
+            start: 140
+            end: 141
+            type: "string"
+
+          - name: "DIAG_CODE_07"
+            start: 141
+            end: 148
+            type: "string"
+
+          - name: "DIAG_FLAG_07"
+            start: 148
+            end: 149
+            type: "string"
+
+          - name: "DIAG_CODE_08"
+            start: 149
+            end: 156
+            type: "string"
+
+          - name: "DIAG_FLAG_08"
+            start: 156
+            end: 157
+            type: "string"
+
+          - name: "DIAG_CODE_09"
+            start: 157
+            end: 164
+            type: "string"
+
+          - name: "DIAG_FLAG_09"
+            start: 164
+            end: 165
+            type: "string"
+
+          - name: "DIAG_CODE_10"
+            start: 165
+            end: 172
+            type: "string"
+
+          - name: "DIAG_FLAG_10"
+            start: 172
+            end: 173
+            type: "string"
+
+          - name: "DIAG_CODE_11"
+            start: 173
+            end: 180
+            type: "string"
+
+          - name: "DIAG_FLAG_11"
+            start: 180
+            end: 181
+            type: "string"
+
+          - name: "DIAG_CODE_12"
+            start: 181
+            end: 188
+            type: "string"
+
+          - name: "DIAG_FLAG_12"
+            start: 188
+            end: 189
+            type: "string"
+
+          - name: "DIAG_CODE_13"
+            start: 189
+            end: 196
+            type: "string"
+
+          - name: "DIAG_FLAG_13"
+            start: 196
+            end: 197
+            type: "string"
+
+          - name: "DIAG_CODE_14"
+            start: 197
+            end: 204
+            type: "string"
+
+          - name: "DIAG_FLAG_14"
+            start: 204
+            end: 205
+            type: "string"
+
+          - name: "DIAG_CODE_15"
+            start: 205
+            end: 212
+            type: "string"
+
+          - name: "DIAG_FLAG_15"
+            start: 212
+            end: 213
+            type: "string"
+
+          - name: "DIAG_CODE_16"
+            start: 213
+            end: 220
+            type: "string"
+
+          - name: "DIAG_FLAG_16"
+            start: 220
+            end: 221
+            type: "string"
+
+          - name: "DIAG_CODE_17"
+            start: 221
+            end: 228
+            type: "string"
+
+          - name: "DIAG_FLAG_17"
+            start: 228
+            end: 229
+            type: "string"
+
+          - name: "DIAG_CODE_18"
+            start: 229
+            end: 236
+            type: "string"
+
+          - name: "DIAG_FLAG_18"
+            start: 236
+            end: 237
+            type: "string"
+
+          - name: "DIAG_CODE_19"
+            start: 237
+            end: 244
+            type: "string"
+
+          - name: "DIAG_FLAG_19"
+            start: 244
+            end: 245
+            type: "string"
+
+          - name: "DIAG_CODE_20"
+            start: 245
+            end: 252
+            type: "string"
+
+          - name: "DIAG_FLAG_20"
+            start: 252
+            end: 253
+            type: "string"
+
+          - name: "DIAG_CODE_21"
+            start: 253
+            end: 260
+            type: "string"
+
+          - name: "DIAG_FLAG_21"
+            start: 260
+            end: 261
+            type: "string"
+
+          - name: "DIAG_CODE_22"
+            start: 261
+            end: 268
+            type: "string"
+
+          - name: "DIAG_FLAG_22"
+            start: 268
+            end: 269
+            type: "string"
+
+          - name: "DIAG_CODE_23"
+            start: 269
+            end: 276
+            type: "string"
+
+          - name: "DIAG_FLAG_23"
+            start: 276
+            end: 277
+            type: "string"
+
+          - name: "DIAG_CODE_24"
+            start: 277
+            end: 284
+            type: "string"
+
+          - name: "DIAG_FLAG_24"
+            start: 284
+            end: 285
+            type: "string"
+
+          - name: "DIAG_CODE_25"
+            start: 285
+            end: 292
+            type: "string"
+
+          - name: "DIAG_FLAG_25"
+            start: 292
+            end: 293
+            type: "string"
+
+          - name: "DIAG_CODE_26"
+            start: 293
+            end: 300
+            type: "string"
+
+          - name: "DIAG_FLAG_26"
+            start: 300
+            end: 301
+            type: "string"
+
+          - name: "DIAG_CODE_27"
+            start: 301
+            end: 308
+            type: "string"
+
+          - name: "DIAG_FLAG_27"
+            start: 308
+            end: 309
+            type: "string"
+
+          - name: "DIAG_CODE_28"
+            start: 309
+            end: 316
+            type: "string"
+
+          - name: "DIAG_FLAG_28"
+            start: 316
+            end: 317
+            type: "string"
+
+          - name: "DIAG_CODE_29"
+            start: 317
+            end: 324
+            type: "string"
+
+          - name: "DIAG_FLAG_29"
+            start: 324
+            end: 325
+            type: "string"
+
+          - name: "DIAG_CODE_30"
+            start: 325
+            end: 332
+            type: "string"
+
+          - name: "DIAG_FLAG_30"
+            start: 332
+            end: 333
+            type: "string"
+
+          - name: "DIAG_CODE_31"
+            start: 333
+            end: 340
+            type: "string"
+
+          - name: "DIAG_FLAG_31"
+            start: 340
+            end: 341
+            type: "string"
+
+          - name: "DIAG_CODE_32"
+            start: 341
+            end: 348
+            type: "string"
+
+          - name: "DIAG_FLAG_32"
+            start: 348
+            end: 349
+            type: "string"
+
+          - name: "DIAG_CODE_33"
+            start: 349
+            end: 356
+            type: "string"
+
+          - name: "DIAG_FLAG_33"
+            start: 356
+            end: 357
+            type: "string"
+
+          - name: "DIAG_CODE_34"
+            start: 357
+            end: 364
+            type: "string"
+
+          - name: "DIAG_FLAG_34"
+            start: 364
+            end: 365
+            type: "string"
+
+          - name: "DIAG_CODE_35"
+            start: 365
+            end: 372
+            type: "string"
+
+          - name: "DIAG_FLAG_35"
+            start: 372
+            end: 373
+            type: "string"
+
+          - name: "DIAG_CODE_36"
+            start: 373
+            end: 380
+            type: "string"
+
+          - name: "DIAG_FLAG_36"
+            start: 380
+            end: 381
+            type: "string"
+
+          - name: "DIAG_CODE_37"
+            start: 381
+            end: 388
+            type: "string"
+
+          - name: "DIAG_FLAG_37"
+            start: 388
+            end: 389
+            type: "string"
+
+          - name: "DIAG_CODE_38"
+            start: 389
+            end: 396
+            type: "string"
+
+          - name: "DIAG_FLAG_38"
+            start: 396
+            end: 397
+            type: "string"
+
+      # ================================
+      # MAO Trailer Record Layout
+      # ================================
+      medicare_mao_trailer:
+        description: "MAO file trailer record"
+        record_type: "T"
+        identifier:
+          columns:
+            - name: "RECORD_TYPE"
+              start: 0
+              end: 1
+            - name: "REPORT_ID"
+              start: 1
+              end: 9
+            - name: "CONTRACT_ID"
+              start: 9
+              end: 15
+            - name: "RECORD_CNT"
+              start: 15
+              end: 25
+
+        columns:
+          - name: "RECORD_TYPE"
+            start: 0
+            end: 1
+            type: "string"
+            description: "Record type indicator (T = Trailer)"
+
+          - name: "REPORT_ID"
+            start: 1
+            end: 9
+            type: "string"
+            description: "Report identifier"
+
+          - name: "CONTRACT_ID"
+            start: 9
+            end: 15
+            type: "string"
+            description: "Medicare contract ID"
+
+          - name: "RECORD_CNT"
+            start: 15
+            end: 25
+            type: "integer"
+            description: "Total record count"
+
+  # ================================
+  # MMR File Configuration
+  # ================================
+  # Medicare Managed Rates supplemental file structure
+
+  MMR:
+    description: "Medicare Managed Rates supplemental file"
+    file_type: "MMR"
+    parse_function: "parse_mmr_files"
+    target_tables:
+      - "mmr"
+
+    tables:
+      mmr:
+        description: "Member Medicare Managed Rates record"
+        identifier:
+          columns:
+            - name: "CONTRACT_NUMBER"
+              start: 0
+              end: 5
+            - name: "RUM_DATE"
+              start: 5
+              end: 13
+
+        columns:
+          - name: "CONTRACT_NUMBER"
+            start: 0
+            end: 5
+            type: "string"
+            description: "Medicare contract number"
+
+          - name: "RUM_DATE"
+            start: 5
+            end: 13
+            type: "date"
+            description: "Run date (YYYYMMDD)"
+
+          - name: "PAYMENT_DATE"
+            start: 13
+            end: 21
+            type: "date"
+            description: "Payment date"
+
+          - name: "BENEFICIARY_ID"
+            start: 21
+            end: 32
+            type: "string"
+            description: "Medicare beneficiary ID"
+
+          - name: "SURNAME"
+            start: 32
+            end: 57
+            type: "string"
+            description: "Beneficiary last name"
+
+          - name: "FIRST_INITIAL"
+            start: 57
+            end: 58
+            type: "string"
+            description: "Beneficiary first initial"
+
+          - name: "GENDER_CODE"
+            start: 58
+            end: 59
+            type: "string"
+            description: "Gender code (M/F)"
+
+          - name: "DATE_OF_BIRTH"
+            start: 59
+            end: 67
+            type: "date"
+            description: "Date of birth (YYYYMMDD)"
+
+          - name: "STATE_AND_COUNTY_CODE"
+            start: 67
+            end: 72
+            type: "string"
+            description: "State and county code"
+
+          - name: "QOA_INDICATOR"
+            start: 72
+            end: 73
+            type: "string"
+            description: "Quality of area indicator"
+
+          - name: "PART_A_ENTITLEMENT"
+            start: 73
+            end: 74
+            type: "string"
+            description: "Part A entitlement code"
+
+          - name: "PART_B_ENTITLEMENT"
+            start: 74
+            end: 75
+            type: "string"
+            description: "Part B entitlement code"
+
+          - name: "HOSPICE"
+            start: 75
+            end: 76
+            type: "string"
+            description: "Hospice indicator"
+
+          - name: "ESRD"
+            start: 76
+            end: 77
+            type: "string"
+            description: "ESRD indicator"
+
+          - name: "AGED_DISABLED_MSP"
+            start: 77
+            end: 78
+            type: "string"
+            description: "Aged/disabled MSP indicator"
+
+          - name: "NEW_MEDICAID_BENEFICIARY_MEDICAID_STATUS_FLAG"
+            start: 78
+            end: 79
+            type: "string"
+            description: "New Medicaid beneficiary flag"
+
+          - name: "LTI_FLAG"
+            start: 79
+            end: 80
+            type: "string"
+            description: "Long-term institutional flag"
+
+          - name: "MEDICAID_INDICATOR"
+            start: 80
+            end: 81
+            type: "string"
+            description: "Medicaid indicator"
+
+          - name: "DEFAULT_RISK_FACTOR_CODE"
+            start: 81
+            end: 84
+            type: "string"
+            description: "Default risk factor code"
+
+          - name: "RISK_ADJUSTMENT_FACTOR_A"
+            start: 84
+            end: 92
+            type: "double"
+            description: "Risk adjustment factor A"
+
+          - name: "RISK_ADJUSTMENT_FACTOR_B"
+            start: 92
+            end: 100
+            type: "double"
+            description: "Risk adjustment factor B"
+
+          - name: "NUMBER_OF_PAYMT_ADJUSTMT_MONTHS_PART_A"
+            start: 100
+            end: 102
+            type: "integer"
+            description: "Number of payment adjustment months Part A"
+
+          - name: "NUMBER_OF_PAYMT_ADJUSTMT_MONTHS_PART_B"
+            start: 102
+            end: 104
+            type: "integer"
+            description: "Number of payment adjustment months Part B"
+
+          - name: "ADJUSTMENT_REASON_CODE"
+            start: 104
+            end: 107
+            type: "string"
+            description: "Adjustment reason code"
+
+          - name: "PAYMT_ADJUSTMENT_START_DATE"
+            start: 107
+            end: 115
+            type: "date"
+            description: "Payment adjustment start date"
+
+          - name: "PAYMT_ADJUSTMENT_END_DATE"
+            start: 115
+            end: 123
+            type: "date"
+            description: "Payment adjustment end date"
+
+          - name: "MONTHLY_PAYMT_ADJUSTMT_AMOUNT_RATE_A"
+            start: 123
+            end: 135
+            type: "double"
+            description: "Monthly payment adjustment amount/rate Part A"
+
+          - name: "MONTHLY_PAYMT_ADJUSTMT_AMOUNT_RATE_B"
+            start: 135
+            end: 147
+            type: "double"
+            description: "Monthly payment adjustment amount/rate Part B"
+
+          - name: "LIS_PREMIUM_SUBSIDY"
+            start: 147
+            end: 151
+            type: "double"
+            description: "LIS premium subsidy"
+
+          - name: "ESRD_FLAG"
+            start: 151
+            end: 152
+            type: "string"
+            description: "ESRD flag"
+
+          - name: "HTM_ADD_ON"
+            start: 152
+            end: 153
+            type: "string"
+            description: "Health therapy management add-on"
+
+          - name: "PART_D_PMT_DCT_POM_AMT"
+            start: 153
+            end: 163
+            type: "double"
+            description: "Part D payment direct POM amount"
+
+          - name: "MEDICAID_STATUS"
+            start: 163
+            end: 164
+            type: "string"
+            description: "Medicaid status"
+
+          - name: "RISK_ADJUSTMENT_AGE_GROUP_FLAG"
+            start: 164
+            end: 165
+            type: "string"
+            description: "Risk adjustment age group flag"
+
+          - name: "PLAN_BENEFIT_PACKAGE_ID"
+            start: 165
+            end: 177
+            type: "string"
+            description: "Plan benefit package ID"
+
+          - name: "RISK_ADJUSTMENT_FACTOR_TYPE_CODE"
+            start: 177
+            end: 179
+            type: "string"
+            description: "Risk adjustment factor type code"
+
+          - name: "FRAILTY_INDICATOR"
+            start: 179
+            end: 180
+            type: "string"
+            description: "Frailty indicator"
+
+          - name: "ORIGINAL_REASON_FOR_ENTITLEMENT_CODE_CRCC"
+            start: 180
+            end: 181
+            type: "string"
+            description: "Original reason for entitlement code (CRCC)"
+
+          - name: "SEGMENT_NUMBER"
+            start: 181
+            end: 183
+            type: "integer"
+            description: "Segment number"
+
+          - name: "EGMP_FLAG"
+            start: 183
+            end: 184
+            type: "string"
+            description: "EGMP flag"
+
+          - name: "PART_C_BASIC_PREMIUM_PART_A_AMOUNT"
+            start: 184
+            end: 194
+            type: "double"
+            description: "Part C basic premium Part A amount"
+
+          - name: "PART_C_BASIC_PREMIUM_PART_B_AMOUNT"
+            start: 194
+            end: 204
+            type: "double"
+            description: "Part C basic premium Part B amount"
+
+          - name: "REBATE_FOR_PART_A_COST_SHARING_REDUCTION"
+            start: 204
+            end: 214
+            type: "double"
+            description: "Rebate for Part A cost sharing reduction"
+
+          - name: "REBATE_FOR_PART_B_COST_SHARING_REDUCTION"
+            start: 214
+            end: 224
+            type: "double"
+            description: "Rebate for Part B cost sharing reduction"
+
+          - name: "REBATE_FOR_PART_A_SUPPLEMENTAL_BENEFITS_PART_A"
+            start: 224
+            end: 234
+            type: "double"
+            description: "Rebate for Part A supplemental benefits"
+
+          - name: "REBATE_FOR_OTHER_PART_B_MANDATORY_SUPPLEMENTAL_BENEFITS"
+            start: 234
+            end: 244
+            type: "double"
+            description: "Rebate for Part B supplemental benefits"
+
+          - name: "REBATE_FOR_PART_D_SUPPLEMENTAL_BENEFITS_PART_D_AMOUNT"
+            start: 244
+            end: 254
+            type: "double"
+            description: "Rebate for Part D supplemental benefits"
+
+          - name: "TOTAL_PART_A_MA_PAYMENT"
+            start: 254
+            end: 264
+            type: "double"
+            description: "Total Part A MA payment"
+
+          - name: "TOTAL_PART_B_MA_PAYMENT"
+            start: 264
+            end: 274
+            type: "double"
+            description: "Total Part B MA payment"
+
+          - name: "TOTAL_MA_PAYMENT_AMOUNT"
+            start: 274
+            end: 284
+            type: "double"
+            description: "Total MA payment amount"
+
+          - name: "PART_D_PA_FACTOR"
+            start: 284
+            end: 292
+            type: "double"
+            description: "Part D PA factor"
+
+          - name: "PART_D_LOW_INCOME_INDICATOR"
+            start: 292
+            end: 293
+            type: "string"
+            description: "Part D low income indicator"
+
+          - name: "PART_D_LOW_INCOME_MULTIPLIER"
+            start: 293
+            end: 301
+            type: "double"
+            description: "Part D low income multiplier"
+
+          - name: "PART_D_LONG_TERM_INSTITUTIONAL_INDICATOR"
+            start: 301
+            end: 302
+            type: "string"
+            description: "Part D long-term institutional indicator"
+
+          - name: "PART_D_LONG_TERM_INSTITUTIONAL_MULTIPLIER"
+            start: 302
+            end: 310
+            type: "double"
+            description: "Part D long-term institutional multiplier"
+
+          - name: "REBATE_FOR_PART_D_BASIC_PREMIUM_REDUCTION"
+            start: 310
+            end: 320
+            type: "double"
+            description: "Rebate for Part D basic premium reduction"
+
+          - name: "PART_D_BASIC_PREMIUM_AMOUNT"
+            start: 320
+            end: 330
+            type: "double"
+            description: "Part D basic premium amount"
+
+          - name: "PART_D_DIRECT_SUBSIDY_MONTHLY_PAYMENT_AMOUNT"
+            start: 330
+            end: 340
+            type: "double"
+            description: "Part D direct subsidy monthly payment amount"
+
+          - name: "REINSURANCE_SUBSIDY_AMOUNT"
+            start: 340
+            end: 350
+            type: "double"
+            description: "Reinsurance subsidy amount"
+
+          - name: "LOW_INCOME_SUBSIDY_COST_SHARING_AMOUNT"
+            start: 350
+            end: 360
+            type: "double"
+            description: "Low income subsidy cost sharing amount"
+
+          - name: "TOTAL_PART_D_PAYMENT"
+            start: 360
+            end: 370
+            type: "double"
+            description: "Total Part D payment"
+
+          - name: "NUMBER_OF_PAYMT_ADJUSTMT_MONTHS_PART_D"
+            start: 370
+            end: 372
+            type: "integer"
+            description: "Number of payment adjustment months Part D"
+
+          - name: "PACE_PREMIUM_ADD_ON"
+            start: 372
+            end: 382
+            type: "double"
+            description: "PACE premium add-on"
+
+          - name: "PACE_COST_SHARING_ADD_ON"
+            start: 382
+            end: 392
+            type: "double"
+            description: "PACE cost sharing add-on"
+
+          - name: "PART_C_FRAILTY_SCORE_FACTOR"
+            start: 392
+            end: 400
+            type: "double"
+            description: "Part C frailty score factor"
+
+          - name: "MSP_REDUCTION_FACTOR"
+            start: 400
+            end: 408
+            type: "double"
+            description: "MSP reduction factor"
+
+          - name: "MSP_REDUCTION_ADJUSTMENT_AMOUNT_PART_A"
+            start: 408
+            end: 418
+            type: "double"
+            description: "MSP reduction adjustment amount Part A"
+
+          - name: "MSP_REDUCTION_ADJUSTMENT_AMOUNT_PART_B"
+            start: 418
+            end: 428
+            type: "double"
+            description: "MSP reduction adjustment amount Part B"
+
+          - name: "PART_B_LONG_TERM_CARE_STATUS_CODE"
+            start: 428
+            end: 429
+            type: "string"
+            description: "Part B long-term care status code"
+
+          - name: "PART_D_COVERAGE_GAP_DISCOUNT_AMOUNT"
+            start: 429
+            end: 439
+            type: "double"
+            description: "Part D coverage gap discount amount"
+
+          - name: "PART_D_COVERAGE_GAP_DISCOUNT_TYPE"
+            start: 439
+            end: 440
+            type: "string"
+            description: "Part D coverage gap discount type"
+
+          - name: "DEFAULT_PART_D_RISK_ADJUSTMENT_FACTOR_CODE"
+            start: 440
+            end: 443
+            type: "string"
+            description: "Default Part D risk adjustment factor code"
+
+          - name: "PART_A_RISK_ADJUSTED_MONTHLY_RATE_AMOUNT_FOR_PYMT_ADJ"
+            start: 443
+            end: 453
+            type: "double"
+            description: "Part A risk adjusted monthly rate for payment adjustment"
+
+          - name: "PART_B_RISK_ADJUSTED_MONTHLY_RATE_AMOUNT_FOR_PYMT_ADJ"
+            start: 453
+            end: 463
+            type: "double"
+            description: "Part B risk adjusted monthly rate for payment adjustment"
+
+          - name: "PART_D_DIRECT_SUBSIDY_MONTHLY_RATE_ADJUSTMENT_AMOUNT"
+            start: 463
+            end: 473
+            type: "double"
+            description: "Part D direct subsidy monthly rate adjustment amount"
+
+          - name: "CLEANUP_ID"
+            start: 473
+            end: 481
+            type: "string"
+            description: "Cleanup identifier"
+
+# ================================
+# File Layout Summary
+# ================================
+# Record type summary for MA supplemental files
+
+file_layout_summary:
+  MAO_004:
+    total_records: "Header + Detail + Trailer"
+    header_length: "118 characters minimum"
+    detail_length: "397 characters"
+    trailer_length: "25 characters"
+    detail_record_count: "Up to 38 diagnosis codes per encounter"
+
+  MMR:
+    total_records: "One record per beneficiary"
+    record_length: "481 characters"
+    fields_count: "100+ data fields"
+
+# ================================
+# Data Type Reference
+# ================================
+# Standard data types used in file layouts
+
+data_types:
+  string:
+    description: "Alphanumeric text"
+    example: "CONTRACT123"
+
+  integer:
+    description: "Whole numbers"
+    example: "123"
+
+  double:
+    description: "Decimal numbers with precision"
+    example: "123.45"
+
+  date:
+    description: "Date in YYYYMMDD format"
+    example: "20240115"

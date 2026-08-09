@@ -1,0 +1,107 @@
+# Common configuration anchors
+common_spark_conf: &common_spark_conf
+  spark.shuffle.io.maxRetries: 5
+  spark.shuffle.io.retryWait: 60s
+  spark.shuffle.compress: 'true'
+  spark.shuffle.maxChunksBeingTransferred: '522337203685477s807'
+  spark.hadoop.datanucleus.autoCreateSchema: 'true'
+  spark.databricks.sql.initial.catalog.name: ${var.pop_catalog}
+  spark.network.timeout: 300s
+  spark.executor.heartbeatInterval: 30s
+  spark.scheduler.mode: FAIR
+  spark.sql.adaptive.enabled: 'true'
+  spark.sql.adaptive.skewJoin.enabled: 'true'
+  spark.sql.adaptive.coalescePartitions.enabled: 'true'
+  spark.databricks.adaptive.autoOptimizeShuffle.enabled: 'true'
+  spark.databricks.aggressiveWindowDownS: '180'
+
+common_aws_attributes: &common_aws_attributes
+  zone_id: ${var.zone_id}
+  availability: ${var.availability}
+  instance_profile_arn: "arn:aws:iam::${var.account_number}:instance-profile/${var.instance_profile_name}"
+
+common_init_scripts: &common_init_scripts
+  - workspace:
+      destination: "/Repos/${var.ENV_CAP}/${var.repo_name}/scripts/init-cluster.sh"
+
+common_custom_tags: &common_custom_tags
+  tenant: ${var.tenant}
+  pod: ${var.pod}
+  project: ${var.project}
+  BillingCode: "POP-${var.env}"
+  billable: ${var.billable}
+  service: ${var.service}
+  env: ${var.env}
+
+common_cluster_settings: &common_cluster_settings
+  data_security_mode: ${var.data_security_mode}
+  runtime_engine: ${var.runtime_engine}
+  enable_elastic_disk: false
+  spark_env_vars:
+    PYSPARK_PYTHON: /databricks/python3/bin/python3
+    spark_version: ${var.spark_version}
+    ssh_public_keys: []
+
+# Cluster specifications for Gap Suspecting Pipeline
+clusters_gp_suspecting: &clusters_gp_suspecting
+  job_clusters:
+  # Large Cluster used for all environments
+  - job_cluster_key: GP-SUSPECTING-LARGE
+    new_cluster:
+      <<: *common_cluster_settings
+      autoscale:
+        min_workers: ${var.large_cluster_min_workers}
+        max_workers: ${var.large_cluster_max_workers}
+      aws_attributes:
+        <<: *common_aws_attributes
+        node_type_id: ${var.large_cluster_node_type}
+        driver_node_type_id: ${var.large_cluster_driver_node_type}
+      init_scripts: *common_init_scripts
+      spark_conf:
+        <<: *common_spark_conf
+        spark.driver.maxResultSize: ${var.large_cluster_driver_max_result_size}
+        spark.sql.files.maxPartitionBytes: 13421728
+      custom_tags:
+        <<: *common_custom_tags
+
+  # Standard Cluster used for DEV/QA env
+  - job_cluster_key: GP-SUSPECTING-STANDARD
+    new_cluster:
+      <<: *common_cluster_settings
+      autoscale:
+        min_workers: ${var.standard_cluster_min_workers}
+        max_workers: ${var.standard_cluster_max_workers}
+      aws_attributes:
+        <<: *common_aws_attributes
+        node_type_id: ${var.standard_cluster_node_type}
+        driver_node_type_id: ${var.standard_cluster_driver_node_type}
+      init_scripts: *common_init_scripts
+      spark_conf:
+        <<: *common_spark_conf
+      custom_tags:
+        <<: *common_custom_tags
+
+targets:
+  DEV:
+    resources:
+      jobs:
+        gp_suspecting_wf:
+          <<: *clusters_gp_suspecting
+
+  QA:
+    resources:
+      jobs:
+        gp_suspecting_wf:
+          <<: *clusters_gp_suspecting
+
+  STG:
+    resources:
+      jobs:
+        gp_suspecting_wf:
+          <<: *clusters_gp_suspecting
+
+  PROD:
+    resources:
+      jobs:
+        gp_suspecting_wf:
+          <<: *clusters_gp_suspecting

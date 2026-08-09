@@ -1,0 +1,554 @@
+# MA/RA Model Constants Configuration
+# This configuration file defines SEDITS diagnosis codes, demographic models,
+# and risk adjustment model mappings for the CMS MA/RA population health pipeline
+
+# ================================
+# SEDITS Diagnosis Codes
+# ================================
+# SEDITS (Specified Excluded Diagnosis Codes) used for condition identification
+SEDITS_DIAG_CODES:
+  SEDITS_DIAG1:
+    - D6E
+    - D6F
+
+  SEDITS_DIAG2:
+    - J410
+    - J411
+    - J418
+    - J42
+    - J430
+    - J431
+    - J432
+    - J435
+    - J439
+    - J440
+    - J441
+    - J449
+    - J952
+    - J953
+    - J4451
+    - J4455
+
+  SEDITS_DIAG3:
+    - C36011
+    - C36012
+    - C36013
+    - C36021
+    - C36022
+    - C36029
+    - C40011
+    - C50112
+    - C50115
+    - C50121
+    - C50122
+    - C50129
+    - C50211
+    - C50212
+    - C50219
+    - C50221
+    - C50222
+    - C50229
+    - C50311
+    - C50312
+    - C50319
+    - C50321
+    - C50322
+    - C50329
+    - C50411
+    - C50412
+    - C50419
+    - C50421
+    - C50422
+    - C50429
+    - C50511
+    - C50512
+    - C50519
+    - C50521
+    - C50522
+    - C50529
+    - C50611
+    - C50612
+    - C50619
+    - C50621
+    - C50622
+    - C50629
+    - C50811
+    - C50812
+    - C50819
+    - C50821
+    - C50822
+    - C50829
+    - C50911
+    - C50912
+    - C50919
+    - C50921
+    - C50922
+    - C50929
+
+  SEDITS_DIAG4:
+    - E0340
+    - E0341
+    - E04110
+    - E04111
+    - E04112
+    - E04113
+    - E04114
+    - E04115
+    - E04116
+    - E04117
+    - E04118
+    - E04119
+    - E04120
+    - E04121
+    - E04122
+    - E04129
+    - E04211
+    - E04212
+    - E04213
+    - E04219
+    - E04220
+    - E04221
+    - E04229
+    - E04310
+    - E04311
+    - E04312
+    - E04313
+    - E04314
+    - E04315
+    - E04316
+    - E04317
+    - E04318
+    - E04319
+    - E04321
+    - E04322
+    - E04323
+    - E04329
+    - E04330
+    - E04331
+    - E04332
+    - E04339
+    - E04410
+    - E04411
+    - E04412
+    - E04413
+    - E04414
+    - E04415
+    - E04416
+    - E04417
+    - E04418
+    - E04419
+    - E04420
+    - E04421
+    - E04422
+    - E04429
+    - E04430
+    - E04431
+    - E04432
+    - E04439
+    - E04510
+    - E04511
+    - E04512
+    - E04513
+    - E04514
+    - E04515
+    - E04516
+    - E04517
+    - E04518
+    - E04519
+    - E04521
+    - E04522
+    - E04523
+    - E04529
+    - E04530
+    - E04531
+    - E04532
+    - E04539
+    - E04610
+    - E04611
+    - E04612
+    - E04613
+    - E04614
+    - E04615
+    - E04616
+    - E04617
+    - E04618
+    - E04619
+    - E04621
+    - E04622
+    - E04623
+    - E04629
+    - E04630
+    - E04631
+    - E04632
+    - E04639
+    - E04710
+    - E04711
+    - E04712
+    - E04713
+    - E04714
+    - E04715
+    - E04716
+    - E04717
+    - E04718
+    - E04719
+    - E04721
+    - E04722
+    - E04723
+    - E04729
+    - E04730
+    - E04731
+    - E04732
+    - E04739
+    - E04810
+    - E04811
+    - E04812
+    - E04813
+    - E04814
+    - E04815
+    - E04816
+    - E04817
+    - E04818
+    - E04819
+    - E04821
+    - E04822
+    - E04823
+    - E04829
+    - E04830
+    - E04831
+    - E04832
+    - E04839
+    - E04910
+    - E04911
+    - E04912
+    - E04913
+    - E04914
+    - E04915
+    - E04916
+    - E04917
+    - E04918
+    - E04919
+    - E04921
+    - E04922
+    - E04923
+    - E04929
+    - E04930
+    - E04931
+    - E04932
+    - E04939
+    - E05010
+    - E05011
+    - E05012
+    - E05013
+    - E05014
+    - E05015
+    - E05016
+    - E05017
+    - E05018
+    - E05019
+    - E05021
+    - E05022
+    - E05023
+    - E05029
+    - E05030
+    - E05031
+    - E05032
+    - E05039
+    - E0610
+    - E0611
+    - E0612
+    - E0619
+    - E06210
+    - E06211
+    - E06219
+    - E06310
+    - E06311
+    - E06319
+    - E06320
+    - E06321
+    - E06329
+    - E06330
+    - E06331
+    - E06339
+    - E06410
+    - E06411
+    - E06419
+    - E06510
+    - E06511
+    - E06519
+    - E06610
+    - E06611
+    - E06619
+    - E06620
+    - E06621
+    - E06629
+    - E06630
+    - E06631
+    - E06639
+    - E06710
+    - E06711
+    - E06719
+    - E06810
+    - E06811
+    - E06819
+    - E06820
+    - E06821
+    - E06829
+    - E06830
+    - E06831
+    - E06839
+    - E06910
+    - E06911
+    - E06919
+    - E07010
+    - E07011
+    - E07019
+    - E07020
+    - E07021
+    - E07029
+    - E07030
+    - E07031
+    - E07039
+    - E07110
+    - E07111
+    - E07119
+    - E07120
+    - E07121
+    - E07129
+    - E07130
+    - E07131
+    - E07139
+    - E07210
+    - E07211
+    - E07219
+    - E07220
+    - E07221
+    - E07229
+    - E07230
+    - E07231
+    - E07239
+    - E07310
+    - E07311
+    - E07319
+    - E07320
+    - E07321
+    - E07329
+    - E07330
+    - E07331
+    - E07339
+    - E07410
+    - E07411
+    - E07419
+    - E07420
+    - E07421
+    - E07429
+    - E07430
+    - E07431
+    - E07439
+    - E07510
+    - E07511
+    - E07519
+    - E07520
+    - E07521
+    - E07529
+    - E07530
+    - E07531
+    - E07539
+    - E07610
+    - E07611
+    - E07619
+    - E07620
+    - E07621
+    - E07629
+    - E07630
+    - E07631
+    - E07639
+    - E07710
+    - E07711
+    - E07719
+    - E07720
+    - E07721
+    - E07729
+    - E07730
+    - E07731
+    - E07739
+    - E07810
+    - E07811
+    - E07819
+    - E07820
+    - E07821
+    - E07829
+    - E07830
+    - E07831
+    - E07839
+    - E07910
+    - E07911
+    - E07919
+    - E07920
+    - E07921
+    - E07929
+    - E07930
+    - E07931
+    - E07939
+
+  SEDITS_DIAG5: []
+
+# ================================
+# Demographic Models
+# ================================
+# Models used for risk stratification based on member demographics
+DEMO_MODELS:
+  - d1_mcaid_female_aged
+  - d1_mcaid_male_aged
+  - d1_mcaid_female_managed
+  - d1_mcaid_male_managed
+  - gs_mcaid_female_aged
+  - gs_mcaid_male_aged
+  - gs_mcaid_female_managed
+  - gs_mcaid_male_managed
+  - d1_medual_female_aged
+  - d1_medual_female_managed
+  - d1_medual_male_aged
+  - d1_medual_male_managed
+  - d1_medual_male_managed
+  - d1_lti_managed
+
+# ================================
+# Transplant Models
+# ================================
+# Models specific to organ transplant patients
+TRANSPLANT_MODELS:
+  - g1_transplant_kidney_only_1m
+  - g1_transplant_kidney_only_1m_3m
+  - gs_transplant_kidney_only_1m
+  - gs_transplant_kidney_only_1m_3m
+  - gm_transplant_kidney_only_1m
+  - grpa_transplant_kidney_only_2m_3m
+  - gfm_transplant_kidney_only_1m
+  - gfa_transplant_kidney_only_1m
+  - gfn_transplant_kidney_only_1m
+  - gm_transplants_kidney_only_2m_3m
+  - grpa_transplants_kidney_only_1m
+  - grpa_transplants_kidney_only_2m_5m
+  - grpm_transplants_kidney_only_2m_3m
+  - grpm_transplants_kidney_only_2m_3m
+  - gfa_transplants_kidney_only_2m_3m
+  - gfn_transplants_kidney_only_1m
+  - gfn_transplants_kidney_only_1m
+
+# ================================
+# Drug Therapy Models
+# ================================
+# Models based on medication therapy duration and characteristics
+DRUG_THERAPY_MODELS:
+  # General LTE5/GET5 duration models
+  - gc_lte5_duri_9
+  - gc_get5_duri_9
+  - gc_lte5_duri0pi
+  - gc_get5_duri0pi
+  - g1_lte5_duri_9
+  - g1_lte5_duri0pi
+  - g1_get5_duri_9
+  - g1_get5_duri0pi
+  - gm_lte5_duri_9
+  - gm_lte5_duri0pi
+  - gm_get5_duri_9
+  - gm_get5_duri0pi
+  - gm_acted3j_duri_9
+  - gm_acted3j_duri0pi
+
+  # Drug duration with PBD (Pharmacy Benefits Data) flags
+  - g1_lte5_duri_9_nd_pbd
+  - g1_lte5_duri_9_fbd
+  - g1_lte5_duri0pi_nd_pbd
+  - g1_lte5_duri0pi_fbd
+  - g1_get5_duri_9_nd_pbd
+  - g1_get5_duri_9_fbd
+  - g1_get5_duri0pi_nd_pbd
+  - g1_get5_duri0pi_fbd
+
+  # Group-based drug duration models
+  - grpa_get5_duri_9_nd_pbd
+  - grpa_get5_duri0pi_nd_pbd
+  - grpa_lte5_duri_9_nd_pbd
+  - grpa_lte5_duri0pi_nd_pbd
+  - grpm_pbd_get5_flag
+  - grpm_lte5_duri_9_nd_pbd
+  - grpm_lte5_duri0pi_nd_pbd
+  - grpm_pbd_lte5_flag
+
+  # Frailty-adjusted drug duration models
+  - gfa_get5_duri_9_fbd
+  - gfa_get5_duri0pi_fbd
+  - gfa_lte5_duri_9_fbd
+  - gfa_lte5_duri0pi_fbd
+  - gfn_lte5_duri_9_fbd
+  - gfn_lte5_duri0pi_fbd
+
+# ================================
+# LTI (Long-Term Institutional) Models
+# ================================
+# Models for long-term institutional care beneficiaries
+LTI_MODELS:
+  - g1_lti_lte5
+  - g1_lti_get5
+  - g1_pbd_lte5_flag
+  - g1_pbd_get5_flag
+
+# ================================
+# DME (Durable Medical Equipment) Models
+# ================================
+# Risk adjustment models for DME-related conditions
+DME_MODELS:
+  - dme_mcmacid_norisgids_ne
+  - dme_mcmacid_orisgids_ne
+  - dme_mcmacid_norisgids_ne
+  - dme_mcmacid_orisgids_ne
+  - gme_mcmacid_norisgids_g_ne
+  - gme_mcmacid_orisgids_g_ne
+  - gm_mcmacid_norisgids_g_ne
+  - gm_mcmacid_orisgids_g_ne
+
+# ================================
+# MA Reference Models
+# ================================
+# Reference models for Medicare Advantage validation and lookups
+MA_REFERENCE:
+  - ma_reference
+
+# ================================
+# Model Categories Summary
+# ================================
+# This organizes all models by their primary use cases
+MODEL_CATEGORIES:
+  demographics:
+    description: "Demographic-based risk models"
+    models: DEMO_MODELS
+
+  transplant:
+    description: "Organ transplant-specific risk models"
+    models: TRANSPLANT_MODELS
+
+  drug_therapy:
+    description: "Medication therapy-based risk models"
+    models: DRUG_THERAPY_MODELS
+
+  lti:
+    description: "Long-term institutional care risk models"
+    models: LTI_MODELS
+
+  dme:
+    description: "Durable medical equipment risk models"
+    models: DME_MODELS
+
+  diagnosis:
+    description: "SEDITS diagnosis code sets for condition identification"
+    sets:
+      - SEDITS_DIAG1
+      - SEDITS_DIAG2
+      - SEDITS_DIAG3
+      - SEDITS_DIAG4
+      - SEDITS_DIAG5
+
+  reference:
+    description: "Reference data for MA validation"
+    models: MA_REFERENCE

@@ -1,0 +1,174 @@
+# Global defaults
+variables:
+  env:
+    description: Environment name (dev, qa, stg, prod)
+  ENV_CAP:
+    description: Environment name in uppercase (DEV, QA, STG, PROD)
+  instance_profile_name:
+    description: AWS instance profile name for Databricks
+  etl_service_principal:
+    description: Service principal for ETL operations
+  databricks_instance:
+    description: Databricks workspace instance URL
+  DATABRICKS:
+    description: Databricks configuration object
+  account_number:
+    description: AWS account number
+  aws_region:
+    default: us-east-1
+  repo_name:
+    default: EMIDS-Population-Advyzer
+  notebook_basepath:
+    default: /Repos/${var.ENV_CAP}/${var.repo_name}/src
+  catalog_name:
+    default: pop_${var.env}
+  pop_catalog:
+    default: pop_${var.env}
+  AWS:
+    default:
+      region: us-east-1
+      secret_name: sa-cicd-pop-${var.env}
+      db_token_secret_name: sa-cicd-pop-${var.env}
+  s3:
+    default:
+      buckets:
+        raw_${var.env}: bhi-pop-${var.env}-datalake-bronze-us-east-1
+        bronze: bhi-pop-${var.env}-datalake-bronze-us-east-1
+        silver: bhi-pop-${var.env}-datalake-silver-us-east-1
+        gold: bhi-pop-${var.env}-datalake-gold-us-east-1
+        airflow: bhi-pop-${var.env}-mwaa-us-east-1
+
+  # Cluster configuration defaults
+  spark_version:
+    default: 15.4.x-scala2.12
+  data_security_mode:
+    default: SINGLE_USER
+  runtime_engine:
+    default: STANDARD
+
+  # AWS cluster attributes
+  zone_id:
+    default: auto
+  availability:
+    default: ON_DEMAND
+
+  # Large cluster sizing defaults
+  large_cluster_node_type:
+    default: i3d.4xlarge
+  large_cluster_driver_node_type:
+    default: i3d.4xlarge
+  large_cluster_min_workers:
+    default:
+  large_cluster_max_workers:
+    default: 40
+  large_cluster_driver_max_result_size:
+    default: 48g
+
+  # Standard cluster sizing defaults
+  standard_cluster_node_type:
+    default: m6d.xlarge
+  standard_cluster_driver_node_type:
+    default: m6d.xlarge
+  standard_cluster_min_workers:
+    default: 1
+  standard_cluster_max_workers:
+    default: 5
+
+  # Custom tags defaults
+  tenant:
+    default: bhi
+  pod:
+    default: government-programs
+  project:
+    default: government-programs
+  service:
+    default: Data Operation
+  billable:
+    default: "FALSE"
+
+  # Workflow defaults
+  max_concurrent_runs:
+    default: 13
+
+  # Persistence HCC defaults
+  prior_years:
+    default: "2"
+
+  # Gap Suspecting defaults
+  claim_duration_years:
+    default: "1"
+  gap_methods:
+    default: "1,2,4,10"
+  generate_extract:
+    default: "NO"
+  model:
+    default: "CMS_MA"
+  reference_schema:
+    default: "MA"
+  threshold:
+    default: "0.75"
+
+  # Common environment variables
+  _common_vars: &common_vars
+    env: ${var.env}
+    ENV_CAP: ${var.ENV_CAP}
+    instance_profile_name: POP-${var.ENV_CAP}_Databricks-Instance_role
+    eti_service_principal: sa-cicd-pop-${var.env}@bluehealthintelligence.com
+
+  # Environment configurations
+  targets:
+    DEV:
+      variables:
+        env: dev
+        ENV_CAP: DEV
+        <<: *common_vars
+        eti_service_principal: 1df9a394-a5c1-496c-9983-21111b30d157
+        databricks_instance: dbc-adc284cf-52b2.cloud.databricks.com
+        DATABRICKS:
+          HOST: https://dbc-adc284cf-52b2.cloud.databricks.com
+        account_number: '733275446440'
+        large_cluster_max_workers: 20
+        standard_cluster_max_workers: 5
+
+    QA:
+      variables:
+        env: qa
+        ENV_CAP: QA
+        <<: *common_vars
+        eti_service_principal: 62588cb1-714c-418f-ac52-93a244c00817
+        databricks_instance: dbc-d9c3ce08-65aa.cloud.databricks.com
+        DATABRICKS:
+          HOST: https://dbc-d9c3ce08-65aa.cloud.databricks.com
+        account_number: '917714657405'
+        large_cluster_max_workers: 8
+        standard_cluster_max_workers: 5
+
+    STG:
+      variables:
+        env: stg
+        ENV_CAP: STG
+        <<: *common_vars
+        eti_service_principal: 32e37a05-e8a7-4633-bdf6-1df85070c46b
+        repo_name: Population-Advyzer
+        databricks_instance: dbc-da53d158-8c2c.cloud.databricks.com
+        DATABRICKS:
+          HOST: https://dbc-da53d158-8c2c.cloud.databricks.com
+        account_number: '167140819713'
+        large_cluster_driver_node_type: i3d.8xlarge
+        large_cluster_driver_max_result_size: 96g
+        standard_cluster_driver_node_type: m6d.2xlarge
+
+    PROD:
+      variables:
+        env: prod
+        ENV_CAP: PROD
+        <<: *common_vars
+        eti_service_principal: 8ea2b21f-a701-48db-8ef6-2217e20b207f
+        repo_name: Population-Advyzer
+        databricks_instance: dbc-4b1b564a-f9f5.cloud.databricks.com
+        DATABRICKS:
+          HOST: https://dbc-4b1b564a-f9f5.cloud.databricks.com
+        account_number: '690596056037'
+        large_cluster_driver_node_type: i3d.8xlarge
+        large_cluster_driver_max_result_size: 96g
+        standard_cluster_driver_node_type: m6d.2xlarge

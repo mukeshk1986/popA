@@ -1,0 +1,49 @@
+resources:
+  jobs:
+  - gp_suspecting_wf:
+      name: gp_suspecting_wf
+      run_name: "gp_suspecting_wf_{{(job.parameters.plan_name)}}_({{job.trigger_time}})"
+      max_concurrent_runs: ${var.max_concurrent_runs}
+      parameters:
+      # — Common
+      - name: env
+        default: ${var.env}
+      - name: catalog
+        default: ${var.catalog_name}
+      - name: run_id
+        default: "{{job.run_id}}"
+      - name: plan_name
+        default: ""
+      - name: risk_year
+        default: ""
+      - name: source_load_month
+        default: ""
+      - name: source_load_year
+        default: ""
+
+      # — Persistence HCC parameters
+      - name: as_of_date
+        default: ""
+      - name: prior_years
+        default: ${var.prior_years}
+
+      # — Gap Suspecting parameters
+      - name: claim_duration_years
+        default: ${var.claim_duration_years}
+      - name: gap_methods
+        default: ${var.gap_methods}
+      - name: generate_extract
+        default: ${var.generate_extract}
+      - name: model
+        default: ${var.model}
+      - name: reference_schema
+        default: ${var.reference_schema}
+      - name: threshold
+        default: ${var.threshold}
+
+      tasks:
+      # ====================================================================
+      # — CMS Persistence HCC
+      # ====================================================================
+      - task_key: cms_persistence_hcc
+        notebook_task:

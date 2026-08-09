@@ -1,0 +1,43 @@
+mostly: ~mostly_val 0.9
+
+tables:
+- table: stage_member
+  schema: ingestion
+  expectations:
+  - type: ExpectTableRowCountToBeBeween
+    min_value:
+    severity: error
+    check_type: data_quality
+
+  - type: ExpectColumnValuesToNotBeNull
+    severity: error
+    check_type: data_quality
+    for_each:
+      parameter: column
+      values: [HEME_PLAN_ID_CD, HEME_ID_CD]
+
+- table: stage_member_enrollment
+  schema: ingestion
+  expectations:
+  - type: ExpectTableRowCountToBeBeween
+    min_value:
+    severity: error
+    check_type: data_quality
+
+  - type: ExpectColumnValuesToMatchRegex
+    regex: '^\d{$}$'
+    severity: error
+    mostly: ~mostly_val
+    check_type: data_quality
+    for_each:
+      parameter: column
+      values: [COVRG_BEGIN_DT, COVRG_END_DT, CONTRACT_EFFECTIVE_DT, CONTRACT_END_DT]
+
+  - type: ExpectColumnValuesToBeBetween
+    min_value:
+    severity: error
+    mostly: ~mostly_val
+    check_type: data_quality
+    for_each:
+      parameter: column
+      values: [PREM_AMT]
