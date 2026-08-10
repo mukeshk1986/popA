@@ -23,7 +23,7 @@ dbutils.widgets.text("plan_onboarding_schema_list", "")
 plan_name = dbutils.widgets.get("plan_name").lower()
 env = dbutils.widgets.get("env").lower()
 env_bucket = "pop-"+env
-catalog = "main"
+catalog = "pop_"+env
 schema_list_raw = dbutils.widgets.get("plan_onboarding_schema_list").strip()
 schema_list = [schema.strip().lower() for schema in schema_list_raw.split(",") if schema.strip()]
 
@@ -55,7 +55,7 @@ ref_schema = COMMON_REFERENCE_SCHEMAS.get(reference_schema_key, "")
 if schema_list and not plan_name:
     raise ValueError("plan_name widget cannot be empty when schema_list is provided.")
 
-if not schema_list and not reference_schema_key:
+if not schema_list and not reference_schema:
     raise ValueError("Either schema_list or reference_schema must be provided.")
 
 # Ensure the common reference schema selection is always part of schema_list processing.
@@ -101,14 +101,91 @@ sam_result_schema = plan_schemas["sam_result"]
 # COMMAND ----------
 
 # DBTITLE 1, Ce11 4
+import importlib
+import sys
+import os
+
+# Reload generic_util to pick up fixes
+if 'src.spark.helpers.generic_util' in sys.modules:
+    importlib.reload(sys.modules['src.spark.helpers.generic_util'])
+
 from src.spark.helpers.config_util import get_config_yaml
 from src.spark.helpers.logger_util import get_logger
-from src.spark.helpers.generic_util import ingestion_folder_check,config_plan_setup
+from src.spark.helpers.generic_util import ingestion_folder_check, run_ddl
+
 config = get_config_yaml("../../../config/environments/"+env+"/values.yaml")
-# Initialize logger
 logger = get_logger()
 catalog = config["catalog"]
-config_plan_setup(spark, catalog, ref_schema, gap_schema_curation, schema_curation, schema_transformation, env_bucket, schema_ingestion, schema_monitoring, v_schema_plan_name, ref_schema, sam_ref_schema, sam_stage_schema, sam_work_schema, sam_result_schema, schema_curation_supp, gap_schema_curation_supp, schema_list)
+
+# Workaround: config_plan_setup has a bug where it doesn't construct full DDL file paths
+# Build the paths manually and call run_ddl directly
+repo_root = "/Workspace/Repos/DEV/popA"
+ddl_base_path = os.path.join(repo_root, "src/sql/ddl")
+
+ddl_groups = {
+    "schema_creation": ["schema_creation"],
+    "ingestion": ["ingestion_tables"],
+    "monitoring": ["monitoring_tables"],
+    "transformation_curation": ["transformation_curation_tables"],
+    "reference": ["ma_ra_reference_tables"],
+    "ma_dashboard": ["ma_dashboard_ref_tables"]
+}
+
+reference_schema_values = {"ma": "ma_reference", "aca": "aca_reference"}
+ma_dashboard_schema_values = {"ma_dashboard": "ma_dashboard_reference"}
+
+ddl_files = []
+for schema_name in schema_list:
+    schema_key = schema_name.strip().lower()
+    if schema_key in ddl_groups:
+        for ddl in ddl_groups[schema_key]:
+            if ddl not in ddl_files:
+                ddl_files.append(ddl)
+    elif schema_key in reference_schema_values:
+        for ddl in ddl_groups["reference"]:
+            if ddl not in ddl_files:
+                ddl_files.append(ddl)
+    elif schema_key in ma_dashboard_schema_values:
+        for ddl in ddl_groups["ma_dashboard"]:
+            if ddl not in ddl_files:
+                ddl_files.append(ddl)
+
+logger.info(f"schema_list : {schema_list}")
+logger.info(f"ddl_files : {ddl_files}")
+
+# Convert schema_list to string (run_ddl expects str, not list)
+schema_list_str = ",".join(schema_list) if isinstance(schema_list, list) else schema_list
+
+# Wrapper to fix SQL syntax issues in DDL files
+def run_ddl_fixed(spark, sql_file_path, catalog, ref_schema, gap_schema_curation, schema_curation, schema_transformation, env_bucket, schema_ingestion, schema_monitoring, v_schema_plan_name, ma_dashboard_ref_schema, sam_ref_schema, sam_stage_schema, sam_work_schema, sam_result_schema, schema_curation_supp, gap_schema_curation_supp, schema_list):
+    import re
+    with open(sql_file_path) as f:
+        sql_template = f.read()
+    
+    sql_rendered = sql_template.replace("${catalog}", catalog).replace("${gap_schema_curation_supp}", gap_schema_curation_supp).replace("${gap_schema_curation}", gap_schema_curation).replace("${schema_curation}", schema_curation).replace("${schema_transformation}", schema_transformation).replace("${env_bucket}", env_bucket).replace("${schema_ingestion}", schema_ingestion).replace("${schema_plan_name}", v_schema_plan_name).replace("${schema_monitoring}", schema_monitoring).replace("${ma_dashboard_reference_schema}", ma_dashboard_ref_schema).replace("${sam_work_schema}", sam_work_schema).replace("${sam_result_schema}", sam_result_schema).replace("${sam_stage_schema}", sam_stage_schema).replace("${sam_ref_schema}", sam_ref_schema).replace("${schema_curation_supp}", schema_curation_supp).replace("${schema_list}", schema_list)
+    
+    # Fix SQL syntax: TBLPROPERTIES must come after PARTITIONED BY
+    sql_rendered = re.sub(
+        r'(USING\s+DELTA)\s+(TBLPROPERTIES\s*\([^)]+\))\s+(PARTITIONED\s+BY\s*\([^)]+\))',
+        r'\1 \3 \2',
+        sql_rendered,
+        flags=re.IGNORECASE | re.DOTALL
+    )
+    
+    statements = [stat.strip() for stat in re.split(r";\s*\n", sql_rendered) if stat.strip()]
+    
+    for stat in statements:
+        print(f"DEBUG: Full statement:\n{stat}\n")
+        spark.sql(stat)
+
+for ddl_file in ddl_files:
+    ddl_file_path = os.path.join(ddl_base_path, ddl_file + ".sql")
+    logger.info(f"****** Execution Started : {ddl_file_path}")
+    run_ddl_fixed(spark, ddl_file_path, catalog, ref_schema, gap_schema_curation, schema_curation, schema_transformation, env_bucket, schema_ingestion, schema_monitoring, v_schema_plan_name, ref_schema, sam_ref_schema, sam_stage_schema, sam_work_schema, sam_result_schema, schema_curation_supp, gap_schema_curation_supp, schema_list_str)
+
+# COMMAND ----------
+
+# MAGIC %sh ls -ltr /Workspace/Repos/DEV/popA/src/sql/ddl/ingestion_tables.sql
 
 # COMMAND ----------
 

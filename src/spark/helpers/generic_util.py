@@ -263,17 +263,18 @@ def config_plan_setup(spark, catalog, ref_schema, gap_schema_curation, schema_cu
 
     for schema_name in schema_list:
         schema_key = schema_name.strip().lower()
-        if schema_key not in ddl_groups:
-            if schema_key in reference_schema_values:
-                for ddl in ddl_groups["reference"]:
-                    if ddl not in ddl_files:
-                        ddl_files.append(ddl)
-            elif schema_key in ma_dashboard_schema_values:
-                for ddl in ddl_groups["ma_dashboard"]:
-                    if ddl not in ddl_files:
-                        ddl_files.append(ddl)
-            elif schema_key not in ddl_files:
-                ddl_files.append(schema_key)
+        if schema_key in ddl_groups:
+            for ddl in ddl_groups[schema_key]:
+                if ddl not in ddl_files:
+                    ddl_files.append(ddl)
+        elif schema_key in reference_schema_values:
+            for ddl in ddl_groups["reference"]:
+                if ddl not in ddl_files:
+                    ddl_files.append(ddl)
+        elif schema_key in ma_dashboard_schema_values:
+            for ddl in ddl_groups["ma_dashboard"]:
+                if ddl not in ddl_files:
+                    ddl_files.append(ddl)
         else:
             invalid_schema_names.append(schema_name)
 
@@ -287,14 +288,13 @@ def config_plan_setup(spark, catalog, ref_schema, gap_schema_curation, schema_cu
         raise ValueError(
             f"Invalid schema names in schema_list: {invalid_schema_names}. "
             f"Allowed DDL groups: {list(ddl_groups.keys())}, "
-            f"Allowed reference schema values: {sorted(list(reference_schema_values.union(ma_dashboard_schema_values)))}."
+            f"Allowed reference schema values: {sorted(list(set(reference_schema_values.keys()) | set(ma_dashboard_schema_values.keys())))}."
         )
 
     logger.info(f"schema_list : {schema_list}")
     logger.info(f"ddl_files : {ddl_files}")
 
     for ddl_file_path in ddl_files:
-        ddl_file_path = f".../{scr_files}/+ddl_files+.sql"
         logger.info(f"****** Execution Started : {ddl_file_path}")
         run_ddl(spark, ddl_file_path, catalog, ref_schema, gap_schema_curation, schema_curation, schema_transformation, env_bucket, schema_ingestion, schema_monitoring, v_schema_plan_name, ma_dashboard_ref_schema, sam_ref_schema, sam_stage_schema, sam_work_schema, sam_result_schema, schema_curation_supp, gap_schema_curation_supp, schema_list)
 
@@ -312,6 +312,8 @@ def run_ddl(spark, sql_file_path: str, catalog: str, ref_schema: str, gap_schema
     Returns:
         str: Rendered SQL.
     """
+    print('*********************')
+    print(sql_file_path)
     with open(sql_file_path) as f:
         sql_template = f.read()
 

@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS S[catalog].S[schema_ingestion].stage_member (
+CREATE TABLE IF NOT EXISTS ${catalog}.${schema_ingestion}.stage_member (
     HOME_PLAN_ID_CD STRING, MEMB_ID_CD STRING, BHT_MEMB_ID STRING, MRB_MEMB_ID STRING,
     PERSON_ID_CD STRING, ALT_MEM_ID STRING, MBRS_NM_LAST STRING, MBRS_NM_FIRST STRING,
     MBRS_STREET1 STRING, MBRS_STREET2 STRING, MBRS_CITY STRING, MBRS_STATE STRING,
@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS S[catalog].S[schema_ingestion].stage_member (
 USING DELTA TBLPROPERTIES( 'delta.columnMapping.mode' = 'name', 'delta.enableIcebergCompatV2' = 'true',
     'delta.universalFormat.enabledFormats' = 'iceberg') PARTITIONED BY (SOURCE_LOAD_MONTH);
 
-CREATE TABLE IF NOT EXISTS S[catalog].S[schema_ingestion].stage_member_enrollment_history (
+CREATE TABLE IF NOT EXISTS ${catalog}.${schema_ingestion}.stage_member_enrollment_history (
     HOME_PLAN_ID_CD STRING, MEMB_ID_CD STRING, BHT_MEMB_ID STRING, CONTRACT_BEGIN_DT STRING,
     CONTRACT_END_DT STRING, POD_ID STRING, ACCT_CD_STRING, GRP_CD STRING,
     SUBGRP_CD STRING, PROD_ID_CD STRING, SOURCE_LOAD_MONTH STRING, CREATED_DATE TIMESTAMP,
@@ -22,7 +22,7 @@ TBLPROPERTIES(
     'delta.columnMapping.mode' = 'name', 'delta.enableIcebergCompatV2' = 'true',
     'delta.universalFormat.enabledFormats' = 'iceberg')PARTITIONED BY (SOURCE_LOAD_MONTH);
 
-CREATE TABLE IF NOT EXISTS S[catalog].S[schema_ingestion].stage_member_enrollment (
+CREATE TABLE IF NOT EXISTS ${catalog}.${schema_ingestion}.stage_member_enrollment (
     TSBELT_ID STRING, MEMB_ID_CD STRING, HOME_PLAN_ID_CD STRING,
     TRCBLT_FIELD_CD STRING, COVRG_BEGIN_DT STRING, COVRG_END_DT STRING, ACCT_CD_STRING,
     GRP_CD STRING, SUBGRP_CD STRING, PROD_ID_CD STRING, PROD_TYPE_CD STRING,
@@ -48,7 +48,7 @@ TBLPROPERTIES(
     'delta.universalFormat.enabledFormats' = 'iceberg')
     PARTITIONED BY (SOURCE_LOAD_MONTH);
 
-CREATE TABLE IF NOT EXISTS S[catalog].S[schema_ingestion].stage_facility_detail (
+CREATE TABLE IF NOT EXISTS ${catalog}.${schema_ingestion}.stage_facility_detail (
     CLM_ID_CD STRING, ADJ_SEQ_NUM STRING, CLM_LN_NUM STRING, HOME_PLAN_ID_CD STRING,
     CPT_AND_HCPCS_CD STRING, PROC_MOD_CD STRING, PROC_MOD_CD2 STRING, PROC_MOD_CD3 STRING,
     PROC_MOD_CD4 STRING, REIMB_TP_CD STRING, REV_CD STRING, TOT_UNITS_VAL STRING,
@@ -58,7 +58,7 @@ CREATE TABLE IF NOT EXISTS S[catalog].S[schema_ingestion].stage_facility_detail 
 USING DELTA TBLPROPERTIES( 'delta.columnMapping.mode' = 'name', 'delta.enableIcebergCompatV2' = 'true',
     'delta.universalFormat.enabledFormats' = 'iceberg') PARTITIONED BY (SOURCE_LOAD_MONTH);
 
-CREATE TABLE IF NOT EXISTS S[catalog].S[schema_ingestion].stage_facility_diag (
+CREATE TABLE IF NOT EXISTS ${catalog}.${schema_ingestion}.stage_facility_diag (
     CLM_ID_CD STRING, ADJ_SEQ_NUM STRING, HOME_PLAN_ID_CD STRING, DIAG_TYPE_CD STRING,
     DIAG_NUM STRING, DIAG_CD STRING, ICD_VER STRING, SOURCE_LOAD_MONTH STRING,
     CREATED_DATE TIMESTAMP, CREATED_BY STRING, UPDATED_DATE TIMESTAMP, UPDATED_BY STRING,
@@ -70,7 +70,7 @@ USING DELTA TBLPROPERTIES(
 PARTITIONED BY (SOURCE_LOAD_MONTH)
 ;
 
-CREATE TABLE IF NOT EXISTS S[catalog].S[schema_ingestion].stage_facility_header (
+CREATE TABLE IF NOT EXISTS ${catalog}.${schema_ingestion}.stage_facility_header (
     ISSUER_ID STRING, PLAN_ID STRING, CLM_ID_CD STRING, ADJ_SEQ_NUM STRING,
     CLM_TP_CD STRING, TRCBLT_FIELD_CD STRING, HOME_PLAN_ID_CD STRING, ITS_CLM_IND STRING,
     HOST_PLAN_ID_CD STRING, TP_OF_BILL_CD STRING, FIRST_SERV_DT STRING, LAST_SERV_DT STRING,
@@ -91,7 +91,7 @@ USING DELTA TBLPROPERTIES( 'delta.columnMapping.mode' = 'name',
     'delta.enableIcebergCompatV2' = 'true', 'delta.universalFormat.enabledFormats' = 'iceberg')
 PARTITIONED BY (SOURCE_LOAD_MONTH);
 
-CREATE TABLE IF NOT EXISTS S[catalog].S[schema_ingestion].stage_professional (
+CREATE TABLE IF NOT EXISTS ${catalog}.${schema_ingestion}.stage_professional (
     ISSUER_ID STRING, PLAN_ID STRING, CLM_ID_CD STRING, ADJ_SEQ_NUM STRING,
     CLM_LN_NUM STRING, TRCBLT_FIELD_CD STRING, HOME_PLAN_ID_CD STRING, ITS_CLM_IND STRING,
     HOST_PLAN_ID_CD STRING, SERV_FROM_DT STRING, SERV_END_DT STRING, CLM_PAID_DT STRING,
@@ -112,7 +112,7 @@ TBLPROPERTIES(
     'delta.universalFormat.enabledFormats' = 'iceberg')
 PARTITIONED BY (SOURCE_LOAD_MONTH);
 
-CREATE TABLE IF NOT EXISTS S[catalog].S[schema_ingestion].stage_professional_diag (
+CREATE TABLE IF NOT EXISTS ${catalog}.${schema_ingestion}.stage_professional_diag (
     CLM_ID_CD STRING, ADJ_SEQ_NUM STRING, HOME_PLAN_ID_CD STRING, DIAG_TYPE_CD STRING,
     DIAG_NUM STRING, DIAG_CD STRING, ICD_VER STRING, SOURCE_LOAD_MONTH STRING,
     CREATED_DATE TIMESTAMP, CREATED_BY STRING, UPDATED_DATE TIMESTAMP, UPDATED_BY STRING,
@@ -121,7 +121,7 @@ USING DELTA
 TBLPROPERTIES( 'delta.columnMapping.mode' = 'name', 'delta.enableIcebergCompatV2' = 'true',
     'delta.universalFormat.enabledFormats' = 'iceberg')PARTITIONED BY (SOURCE_LOAD_MONTH);
 
-CREATE TABLE IF NOT EXISTS S[catalog].S[schema_ingestion].stage_pharmacy (
+CREATE TABLE IF NOT EXISTS ${catalog}.${schema_ingestion}.stage_pharmacy (
     ISSUER_ID STRING, PLAN_ID STRING, MEMB_ID_CD STRING, AGE_YR STRING,
     MEMB_GENDER_CD STRING, PROD_ID_CD STRING, POP_ID STRING, CLM_ID_CD STRING,
     ADJ_SEQ_NUM STRING, CLM_LN_NUM STRING, TRCBLT_FIELD_CD STRING, HOME_PLAN_ID_CD STRING,
@@ -137,7 +137,7 @@ USING DELTA
 TBLPROPERTIES( 'delta.columnMapping.mode' = 'name', 'delta.enableIcebergCompatV2' = 'true',
     'delta.universalFormat.enabledFormats' = 'iceberg')PARTITIONED BY (SOURCE_LOAD_MONTH);
 
-CREATE TABLE IF NOT EXISTS S[catalog].S[schema_ingestion].stage_health_events (
+CREATE TABLE IF NOT EXISTS ${catalog}.${schema_ingestion}.stage_health_events (
     HOME_PLAN_ID_CD STRING, MEMB_ID_CD STRING, PROGRAM_ID STRING, EVENT_ID STRING,
     COND_CAT STRING, COND_VER STRING, PROCESS_DATE STRING, PROG_START_DT STRING,
     PROG_END_DT STRING, RECORD_ID STRING, RECORD_SUB_ID STRING, PERCENT_WEIGHT STRING,
@@ -147,7 +147,7 @@ USING DELTA TBLPROPERTIES( 'delta.columnMapping.mode' = 'name',
     'delta.enableIcebergCompatV2' = 'true', 'delta.universalFormat.enabledFormats' = 'iceberg')
 PARTITIONED BY (SOURCE_LOAD_MONTH);
 
-CREATE TABLE IF NOT EXISTS S[catalog].S[schema_ingestion].stage_provider (
+CREATE TABLE IF NOT EXISTS ${catalog}.${schema_ingestion}.stage_provider (
     HOME_PLAN_ID_CD STRING, BHI_PROV_ID STRING, PROVIDER_ID STRING, ALT_PROV_ID STRING,
     CON_PROV_ID STRING, PROV_SPCLT_CD STRING, PLAN_PROV_SPCLT_CD STRING, CMS_SPCLT_CD STRING,
     PROV_TYPE STRING, PROV_NET_IND STRING, OOA_IND STRING, PROV_DOE_NM STRING,
@@ -164,7 +164,7 @@ CREATE TABLE IF NOT EXISTS S[catalog].S[schema_ingestion].stage_provider (
 USING DELTA TBLPROPERTIES( 'delta.columnMapping.mode' = 'name', 'delta.enableIcebergCompatV2' = 'true',
     'delta.universalFormat.enabledFormats' = 'iceberg') PARTITIONED BY (SOURCE_LOAD_MONTH);
 
-CREATE TABLE IF NOT EXISTS S[catalog].S[schema_ingestion].stage_location (
+CREATE TABLE IF NOT EXISTS ${catalog}.${schema_ingestion}.stage_location (
     HOME_PLAN_ID_CD STRING, BILL_PROV_ID STRING, LOCATION_ID STRING, LOCATION_ADDRESS_ID STRING,
     LOCATION_NAME STRING, LOCATION_PEER_GROUP STRING, LOCATION_STREET1 STRING, LOCATION_STREET2 STRING,
     LOCATION_CITY STRING, LOCATION_COUNTY_CD STRING, LOCATION_STATE STRING, LOCATION_ZIP STRING,
@@ -176,7 +176,7 @@ CREATE TABLE IF NOT EXISTS S[catalog].S[schema_ingestion].stage_location (
 USING DELTA TBLPROPERTIES( 'delta.columnMapping.mode' = 'name', 'delta.enableIcebergCompatV2' = 'true',
     'delta.universalFormat.enabledFormats' = 'iceberg') PARTITIONED BY (SOURCE_LOAD_MONTH);
 
-CREATE TABLE IF NOT EXISTS S[catalog].S[schema_ingestion].stage_designated_provider (
+CREATE TABLE IF NOT EXISTS ${catalog}.${schema_ingestion}.stage_designated_provider (
     MEMB_ID_CD STRING, PROV_ID STRING, HOME_PLAN_ID_CD STRING, START_DATE STRING,
     END_DATE STRING, PROV_ARRANGEMENT_PROGRAM_ID STRING, SEG1_ID STRING, SEG2_ID STRING,
     SOURCE_LOAD_MONTH STRING, CREATED_DATE TIMESTAMP, CREATED_BY STRING, UPDATED_DATE TIMESTAMP,
@@ -185,7 +185,7 @@ USING DELTA TBLPROPERTIES( 'delta.columnMapping.mode' = 'name',
     'delta.enableIcebergCompatV2' = 'true', 'delta.universalFormat.enabledFormats' = 'iceberg')
 PARTITIONED BY (SOURCE_LOAD_MONTH);
 
-CREATE TABLE IF NOT EXISTS S[catalog].S[schema_ingestion].stage_quality_events (
+CREATE TABLE IF NOT EXISTS ${catalog}.${schema_ingestion}.stage_quality_events (
     HOME_PLAN_ID_CD STRING, MEMB_ID_CD STRING, EVENT_CD STRING, EVENT_DT STRING,
     EVENT_PROV_ID_CD STRING, CLM_ID_CD STRING, CLM_LN_NUM STRING, TRCBLT_FIELD_CD STRING,
     SOURCE_LOAD_MONTH STRING, CREATED_DATE TIMESTAMP, CREATED_BY STRING, UPDATED_DATE TIMESTAMP,
@@ -193,7 +193,7 @@ CREATE TABLE IF NOT EXISTS S[catalog].S[schema_ingestion].stage_quality_events (
 USING DELTA TBLPROPERTIES( 'delta.columnMapping.mode' = 'name', 'delta.enableIcebergCompatV2' = 'true',
     'delta.universalFormat.enabledFormats' = 'iceberg')PARTITIONED BY (SOURCE_LOAD_MONTH);
 
-CREATE TABLE IF NOT EXISTS S[catalog].S[schema_ingestion].stage_lab (
+CREATE TABLE IF NOT EXISTS ${catalog}.${schema_ingestion}.stage_lab (
     HOME_PLAN_ID_CD STRING, MEMB_ID_CD STRING, CLM_ID_CD STRING, LOINC_CD STRING,
     SERV_DT STRING, LAB_ID STRING, LAB_RESULT_CD STRING, LAB_RESULT_VAL STRING,
     LAB_RESULT_FLAG_CD STRING, TRCBLT_FIELD_CD STRING, ORDERING_PROV_ID STRING, ORDERING_PROV_NPI STRING,
@@ -203,7 +203,7 @@ CREATE TABLE IF NOT EXISTS S[catalog].S[schema_ingestion].stage_lab (
 USING DELTA TBLPROPERTIES( 'delta.columnMapping.mode' = 'name', 'delta.enableIcebergCompatV2' = 'true',
     'delta.universalFormat.enabledFormats' = 'iceberg') PARTITIONED BY (SOURCE_LOAD_MONTH);
 
-CREATE TABLE IF NOT EXISTS S[catalog].S[schema_ingestion].stage_mmr(
+CREATE TABLE IF NOT EXISTS ${catalog}.${schema_ingestion}.stage_mmr(
     CONTRACT_NUMBER STRING, RUN_DATE STRING, PAYMENT_DATE STRING, BENEFICIARY_ID STRING,
     SURNAME STRING, FIRST_INITIAL STRING, GENDER_CODE STRING, DATE_OF_BIRTH STRING,
     STATE_AND_COUNTY_CODE STRING, OUT_OF_AREA_INDICATOR STRING, PART_A_ENTITLEMENT STRING, PART_B_ENTITLEMENT STRING,
@@ -233,7 +233,7 @@ USING delta TBLPROPERTIES( 'delta.columnMapping.mode' = 'name', 'delta.enableIce
     'delta.feature.allowColumnDefaults' = 'supported', 'delta.universalFormat.enabledFormats' = 'iceberg')
 PARTITIONED BY (SOURCE_LOAD_MONTH);
 
-CREATE TABLE IF NOT EXISTS S[catalog].S[schema_ingestion].stage_medicare_mao_header (
+CREATE TABLE IF NOT EXISTS ${catalog}.${schema_ingestion}.stage_medicare_mao_header (
     RECORD_TYPE STRING, REPORT_ID STRING, CONTRACT_ID STRING, REPORT_DATE STRING,
     REPORT_DESC STRING, SUB_FILE_TYPE STRING, PHASE STRING, VERSION_STRING,
     PLAN_NAME STRING, SOURCE_LOAD_MONTH STRING, CREATED_BY STRING, CREATED_DATE TIMESTAMP,
@@ -241,14 +241,14 @@ CREATE TABLE IF NOT EXISTS S[catalog].S[schema_ingestion].stage_medicare_mao_hea
 USING DELTA TBLPROPERTIES( 'delta.columnMapping.mode' = 'name',
     'delta.enableIcebergCompatV2' = 'true', 'delta.universalFormat.enabledFormats' = 'iceberg');
 
-CREATE TABLE IF NOT EXISTS S[catalog].S[schema_ingestion].stage_medicare_mao_trailer (
+CREATE TABLE IF NOT EXISTS ${catalog}.${schema_ingestion}.stage_medicare_mao_trailer (
     RECORD_TYPE STRING, REPORT_ID STRING, CONTRACT_ID STRING, NUMRECS STRING,
     PLAN_NAME STRING, SOURCE_LOAD_MONTH STRING, CREATED_DATE TIMESTAMP, CREATED_BY STRING,
     UPDATED_BY STRING, UPDATED_DATE TIMESTAMP)
 USING DELTA TBLPROPERTIES( 'delta.columnMapping.mode' = 'name',
     'delta.enableIcebergCompatV2' = 'true', 'delta.universalFormat.enabledFormats' = 'iceberg');
 
-CREATE TABLE IF NOT EXISTS S[catalog].S[schema_ingestion].stage_medicare_mao (
+CREATE TABLE IF NOT EXISTS ${catalog}.${schema_ingestion}.stage_medicare_mao (
     RECORD_TYPE STRING, REPORT_ID STRING, CONTRACT_ID STRING, MBI STRING,
     ICN STRING, ENCOUNTER_TYPE STRING, ENCOUNTER_ICN STRING, ALLOWED_STATUS STRING,
     SUBMIT_DATE STRING, DOS_FROM STRING, DOS_THRU STRING, SERVICE_TYPE STRING,
@@ -278,14 +278,14 @@ CREATE TABLE IF NOT EXISTS S[catalog].S[schema_ingestion].stage_medicare_mao (
 USING DELTA TBLPROPERTIES( 'delta.columnMapping.mode' = 'name', 'delta.enableIcebergCompatV2' = 'true',
     'delta.feature.allowColumnDefaults' = 'supported', 'delta.universalFormat.enabledFormats' = 'iceberg');
 
-CREATE TABLE IF NOT EXISTS S[catalog].S[schema_ingestion].stage_medicare_mor_partc_header (
+CREATE TABLE IF NOT EXISTS ${catalog}.${schema_ingestion}.stage_medicare_mor_partc_header (
     FID STRING NOT NULL, RECORD_TYPE_CODE STRING NOT NULL, CONTRACT_NUMBER STRING NOT NULL, RUN_DATE STRING,
     PAYMENT_YEAR_MONTH STRING, PLAN_NAME STRING, SOURCE_LOAD_MONTH STRING, CREATED_BY STRING,
     CREATED_DATE TIMESTAMP, UPDATED_BY STRING, UPDATED_DATE TIMESTAMP)
 USING DELTA TBLPROPERTIES( 'delta.columnMapping.mode' = 'name', 'delta.enableIcebergCompatV2' = 'true',
     'delta.universalFormat.enabledFormats' = 'iceberg');
 
-CREATE TABLE IF NOT EXISTS S[catalog].S[schema_ingestion].stage_medicare_mor_partc_trailer (
+CREATE TABLE IF NOT EXISTS ${catalog}.${schema_ingestion}.stage_medicare_mor_partc_trailer (
     FID STRING NOT NULL, RECORD_TYPE_CODE STRING NOT NULL, CONTRACT_NUMBER STRING NOT NULL, TOTAL_RECORD_COUNT STRING NOT NULL,
     PLAN_NAME STRING, SOURCE_LOAD_MONTH STRING, CREATED_BY STRING, CREATED_DATE TIMESTAMP,
     UPDATED_BY STRING, UPDATED_DATE TIMESTAMP)
