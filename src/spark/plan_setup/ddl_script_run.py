@@ -100,7 +100,7 @@ sam_result_schema = plan_schemas["sam_result"]
 
 # COMMAND ----------
 
-# DBTITLE 1, Ce11 4
+# DBTITLE 1,Running the run_ddl function
 import importlib
 import sys
 import os
@@ -164,19 +164,67 @@ def run_ddl_fixed(spark, sql_file_path, catalog, ref_schema, gap_schema_curation
     
     sql_rendered = sql_template.replace("${catalog}", catalog).replace("${gap_schema_curation_supp}", gap_schema_curation_supp).replace("${gap_schema_curation}", gap_schema_curation).replace("${schema_curation}", schema_curation).replace("${schema_transformation}", schema_transformation).replace("${env_bucket}", env_bucket).replace("${schema_ingestion}", schema_ingestion).replace("${schema_plan_name}", v_schema_plan_name).replace("${schema_monitoring}", schema_monitoring).replace("${ma_dashboard_reference_schema}", ma_dashboard_ref_schema).replace("${sam_work_schema}", sam_work_schema).replace("${sam_result_schema}", sam_result_schema).replace("${sam_stage_schema}", sam_stage_schema).replace("${sam_ref_schema}", sam_ref_schema).replace("${schema_curation_supp}", schema_curation_supp).replace("${schema_list}", schema_list)
     
-    # Fix SQL syntax: TBLPROPERTIES must come after PARTITIONED BY
-    sql_rendered = re.sub(
-        r'(USING\s+DELTA)\s+(TBLPROPERTIES\s*\([^)]+\))\s+(PARTITIONED\s+BY\s*\([^)]+\))',
-        r'\1 \3 \2',
-        sql_rendered,
-        flags=re.IGNORECASE | re.DOTALL
-    )
+    # Fix SQL syntax: swap TBLPROPERTIES and PARTITIONED BY when they're in wrong order
+    def find_balanced_parens(text, start_pos):
+        """Find closing paren for the opening paren at start_pos"""
+        if text[start_pos] != '(':
+            return -1
+        depth = 0
+        for i in range(start_pos, len(text)):
+            if text[i] == '(':
+                depth += 1
+            elif text[i] == ')':
+                depth -= 1
+                if depth == 0:
+                    return i
+        return -1
+    
+    # Find and swap USING DELTA TBLPROPERTIES(...) PARTITIONED BY(...)
+    # Process all occurrences in the file
+    offset = 0
+    while True:
+        pattern = re.compile(r'USING\s+DELTA\s+TBLPROPERTIES\s*\(', re.IGNORECASE)
+        match = pattern.search(sql_rendered, offset)
+        
+        if not match:
+            break
+            
+        tblprops_start = match.end() - 1  # Position of '(' after TBLPROPERTIES
+        tblprops_end = find_balanced_parens(sql_rendered, tblprops_start)
+        
+        if tblprops_end == -1:
+            offset = match.end()
+            continue
+        
+        # Extract TBLPROPERTIES clause
+        tblprops_clause = sql_rendered[match.start():tblprops_end+1]
+        
+        # Look for PARTITIONED BY after TBLPROPERTIES (with or without space)
+        remaining = sql_rendered[tblprops_end+1:]
+        part_match = re.match(r'\s*(PARTITIONED\s+BY\s*\([^)]+\))', remaining, re.IGNORECASE)
+        
+        if part_match:
+            partitioned_clause = part_match.group(1)
+            # Reconstruct with swapped order
+            before = sql_rendered[:match.start()]
+            after = sql_rendered[tblprops_end+1+part_match.end():]
+            sql_rendered = before + "USING DELTA " + partitioned_clause + " " + tblprops_clause[len("USING DELTA "):] + after
+            offset = len(before) + len("USING DELTA ") + len(partitioned_clause) + 1 + len(tblprops_clause) - len("USING DELTA ")
+        else:
+            offset = match.end()
     
     statements = [stat.strip() for stat in re.split(r";\s*\n", sql_rendered) if stat.strip()]
     
-    for stat in statements:
-        print(f"DEBUG: Full statement:\n{stat}\n")
-        spark.sql(stat)
+    print(f"DEBUG: Total {len(statements)} statements to execute")
+    for i, stat in enumerate(statements, 1):
+        try:
+            print(f"\nDEBUG: Executing statement {i}/{len(statements)}...")
+            spark.sql(stat)
+            print(f"SUCCESS: Statement {i} completed")
+        except Exception as e:
+            print(f"\nERROR: Statement {i} failed with error: {e}")
+            print(f"\nFailing statement:\n{stat}")
+            raise
 
 for ddl_file in ddl_files:
     ddl_file_path = os.path.join(ddl_base_path, ddl_file + ".sql")
