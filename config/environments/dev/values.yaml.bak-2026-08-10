@@ -7,7 +7,7 @@ s3:
 
 airflow:
   source: "WORKSPACE"
-  databricks_instance: dbc-e0536a91-20e3.cloud.databricks.com
+  databricks_instance: dbc-adc284cf-52b2.cloud.databricks.com
   jobs_api_url: api/2.1/jobs/get-output?run_id=
   permissions_api_url: api/2.0/preview/permissions/jobs
   version: 2.0
