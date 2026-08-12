@@ -1,4 +1,4 @@
---all schema needed for plan onboarding and reference tables
+--all schema needed for plan onboarding and reference tables 1
 CREATE SCHEMA IF NOT EXISTS ${catalog}.${gap_schema_curation} managed location 's3://bhi-${env_bucket}-datalake-${schema_plan_name}gold-us-east-1/${gap_schema_curation}';
 
 CREATE SCHEMA IF NOT EXISTS ${catalog}.${schema_ingestion} managed location 's3://bhi-${env_bucket}-datalake-${schema_plan_name}bronze-us-east-1/${schema_ingestion}';
