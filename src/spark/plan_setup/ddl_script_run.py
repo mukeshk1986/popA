@@ -72,7 +72,7 @@ v_schema_plan_name = get_path_plan_name(plan_name)
 # risk-scoring runs (must stay in sync with get_curation_schema / get_gap_curation_schema).
 schema_curation_supp = v_plan_name+"curation_supp"
 gap_schema_curation_supp = v_plan_name+"gap_curation_supp"
-effective_plan_name = v_plan_name if plan_name else "non_anthec"
+effective_plan_name = v_plan_name if plan_name else "non_anthem"
 v_schema_plan_name = get_path_plan_name(effective_plan_name)
 
 # PLAN-SPECIFIC schemas: <plan_prefix>+<base>, where plan_prefix is "" for non_anthec.
@@ -133,6 +133,7 @@ ddl_groups = {
 
 reference_schema_values = {"ma": "ma_reference", "aca": "aca_reference"}
 ma_dashboard_schema_values = {"ma_dashboard": "ma_dashboard_reference"}
+print(reference_schema_values[reference_schema_raw])
 
 ddl_files = []
 for schema_name in schema_list:
@@ -162,7 +163,7 @@ def run_ddl_fixed(spark, sql_file_path, catalog, ref_schema, gap_schema_curation
     with open(sql_file_path) as f:
         sql_template = f.read()
     
-    sql_rendered = sql_template.replace("${catalog}", catalog).replace("${gap_schema_curation_supp}", gap_schema_curation_supp).replace("${gap_schema_curation}", gap_schema_curation).replace("${schema_curation}", schema_curation).replace("${schema_transformation}", schema_transformation).replace("${env_bucket}", env_bucket).replace("${schema_ingestion}", schema_ingestion).replace("${schema_plan_name}", v_schema_plan_name).replace("${schema_monitoring}", schema_monitoring).replace("${ma_dashboard_reference_schema}", ma_dashboard_ref_schema).replace("${sam_work_schema}", sam_work_schema).replace("${sam_result_schema}", sam_result_schema).replace("${sam_stage_schema}", sam_stage_schema).replace("${sam_ref_schema}", sam_ref_schema).replace("${schema_curation_supp}", schema_curation_supp).replace("${schema_list}", schema_list)
+    sql_rendered = sql_template.replace("${catalog}", catalog).replace("${gap_schema_curation_supp}", gap_schema_curation_supp).replace("${gap_schema_curation}", gap_schema_curation).replace("${schema_curation}", schema_curation).replace("${schema_transformation}", schema_transformation).replace("${env_bucket}", env_bucket).replace("${schema_ingestion}", schema_ingestion).replace("${schema_plan_name}", v_schema_plan_name).replace("${schema_monitoring}", schema_monitoring).replace("${ma_dashboard_reference_schema}", ma_dashboard_ref_schema).replace("${schema_reference}", reference_schema_values[reference_schema_raw]).replace("${sam_work_schema}", sam_work_schema).replace("${sam_result_schema}", sam_result_schema).replace("${sam_stage_schema}", sam_stage_schema).replace("${sam_ref_schema}", sam_ref_schema).replace("${schema_curation_supp}", schema_curation_supp).replace("${schema_list}", schema_list)
     
     # Fix SQL syntax: swap TBLPROPERTIES and PARTITIONED BY when they're in wrong order
     def find_balanced_parens(text, start_pos):

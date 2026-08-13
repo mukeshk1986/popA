@@ -10,56 +10,40 @@ CREATE TABLE IF NOT EXISTS ${catalog}.${schema_reference}.time_periods (
     UPDATED_DATE TIMESTAMP,
     UPDATED_BY STRING
 )
-USING DELTA
-WITH SERDEPROPERTIES(
-    'delta.columnMapping.mode' = 'name',
-    'delta.enableIcebergCompat2' = 'true',
-    'delta.universalFormat.enabledFormat' = 'iceberg');
+USING DELTA;
 
 CREATE TABLE IF NOT EXISTS ${catalog}.${schema_reference}.ref_risk_model (
     MODEL_ID SMALLINT NOT NULL,
     MODEL_NAME STRING NOT NULL,
-    PROGRAM_MODEL VARCHAR(),
-    PROGRAM_VARCHAR(),
+    PROGRAM_MODEL STRING,
+    PROGRAM STRING,
     CREATED_DATE TIMESTAMP,
-    CREATED_BY VARCHAR(::),
+    CREATED_BY STRING,
     UPDATED_DATE TIMESTAMP,
-    UPDATED_BY VARCHAR(::)
+    UPDATED_BY STRING
 )
-USING DELTA
-WITH SERDEPROPERTIES(
-    'delta.columnMapping.mode' = 'name',
-    'delta.enableIcebergCompat2' = 'true',
-    'delta.universalFormat.enabledFormat' = 'iceberg',
-    'tag.usage_status' = 'not_used_in_code',
-    'tag.purpose' = 'reference_future_use');
+USING DELTA;
 
 CREATE TABLE IF NOT EXISTS ${catalog}.${schema_reference}.ref_risk_variable (
     VARIABLE_ID INT NOT NULL,
     MODEL_ID SMALLINT NOT NULL,
     RAR_MODEL_VERSION_ID SMALLINT,
-    VARIABLE_CODE VARCHAR(),
-    VARIABLE_DESC VARCHAR(),
+    VARIABLE_CODE STRING,
+    VARIABLE_DESC STRING,
     MIN_AGE_LAST SMALLINT,
     MAX_AGE_LAST SMALLINT,
-    GENDER VARCHAR(),
-    HCC_FLAG VARCHAR(),
-    ELIG_FLAG VARCHAR(),
-    DEMO_FLAG VARCHAR(),
-    AGESENDER_FLAG VARCHAR(),
-    INCLUDE_IN_COUNTS VARCHAR(),
+    GENDER STRING,
+    HCC_FLAG STRING,
+    ELIG_FLAG STRING,
+    DEMO_FLAG STRING,
+    AGESENDER_FLAG STRING,
+    INCLUDE_IN_COUNTS STRING,
     CREATED_DATE TIMESTAMP,
-    CREATED_BY VARCHAR(::),
+    CREATED_BY STRING,
     UPDATED_DATE TIMESTAMP,
-    UPDATED_BY VARCHAR(::)
+    UPDATED_BY STRING
 )
-USING DELTA
-WITH SERDEPROPERTIES(
-    'delta.columnMapping.mode' = 'name',
-    'delta.enableIcebergCompat2' = 'true',
-    'delta.universalFormat.enabledFormat' = 'iceberg',
-    'tag.usage_status' = 'not_used_in_code',
-    'tag.purpose' = 'reference_future_use');
+USING DELTA;
 
 CREATE TABLE IF NOT EXISTS ${catalog}.${schema_reference}.ref_risk_variable_detail (
     VARIABLE_ID INT NOT NULL,
@@ -68,33 +52,29 @@ CREATE TABLE IF NOT EXISTS ${catalog}.${schema_reference}.ref_risk_variable_deta
     RAR_MODEL_VERSION_ID SMALLINT,
     TYPE_ID TINYINT,
     CREATED_DATE TIMESTAMP,
-    CREATED_BY VARCHAR(::),
+    CREATED_BY STRING,
     UPDATED_DATE TIMESTAMP,
-    UPDATED_BY VARCHAR(::)
+    UPDATED_BY STRING
 )
-USING DELTA
-WITH SERDEPROPERTIES(
-    'delta.columnMapping.mode' = 'name',
-    'delta.enableIcebergCompat2' = 'true',
-    'delta.universalFormat.enabledFormat' = 'iceberg');
+USING DELTA;
 
 CREATE TABLE IF NOT EXISTS ${catalog}.${schema_reference}.ref_method_metadata (
     METHOD_ID SMALLINT NOT NULL,
     PROGRAM_ID INT,
-    PROGRAM_MODEL VARCHAR(),
-    PROG_TYPE VARCHAR(),
-    ICD_VER VARCHAR(),
-    CLAIM_CD_TYPE VARCHAR(),
-    CLAIM_CD VARCHAR(),
-    CLAIM_CD_MODIFIER_TYPE VARCHAR(),
-    CLAIM_CD_MODIFIER VARCHAR(),
+    PROGRAM_MODEL STRING,
+    PROG_TYPE STRING,
+    ICD_VER STRING,
+    CLAIM_CD_TYPE STRING,
+    CLAIM_CD STRING,
+    CLAIM_CD_MODIFIER_TYPE STRING,
+    CLAIM_CD_MODIFIER STRING,
     OJ_ID INT,
     SUBCO BIGINT,
-    GENDER VARCHAR(),
-    EXCLUSION_TYPE_1 VARCHAR(),
-    EXCLUSION_1 VARCHAR(),
-    EXCLUSION_TYPE_2 VARCHAR(),
-    EXCLUSION_2 VARCHAR(),
+    GENDER STRING,
+    EXCLUSION_TYPE_1 STRING,
+    EXCLUSION_1 STRING,
+    EXCLUSION_TYPE_2 STRING,
+    EXCLUSION_2 STRING,
     AGE_FIRST_START SMALLINT,
     AGE_FIRST_END SMALLINT,
     AGE_LAST_STAFF SMALLINT,
@@ -105,31 +85,23 @@ CREATE TABLE IF NOT EXISTS ${catalog}.${schema_reference}.ref_method_metadata (
     EFFECTIVE_DATE DATE,
     EXPIRATION_DATE DATE,
     CREATED_DATE TIMESTAMP,
-    CREATED_BY VARCHAR(::),
+    CREATED_BY STRING,
     UPDATED_DATE TIMESTAMP,
-    UPDATED_BY VARCHAR(::)
+    UPDATED_BY STRING
 )
 USING DELTA
-WITH SERDEPROPERTIES(
-    'delta.columnMapping.mode' = 'name',
-    'delta.enableIcebergCompat2' = 'true',
-    'delta.universalFormat.enabledFormat' = 'iceberg')
-PARTITIONED BY (METHOD_ID, PROGRAM);
+PARTITIONED BY (METHOD_ID, PROGRAM_ID);
 
 CREATE TABLE IF NOT EXISTS ${catalog}.${schema_reference}.version_weightage_risk_year (
-    MODEL_PERIOD,
+    MODEL_PERIOD STRING,
     VERSION STRING,
     RAR_VERSION BIGINT,
     CREATED_DATE TIMESTAMP,
-    CREATED_BY VARCHAR(::),
+    CREATED_BY STRING,
     UPDATED_DATE TIMESTAMP,
-    UPDATED_BY VARCHAR(::)
+    UPDATED_BY STRING
 )
-USING DELTA
-WITH SERDEPROPERTIES(
-    'delta.columnMapping.mode' = 'name',
-    'delta.enableIcebergCompat2' = 'true',
-    'delta.universalFormat.enabledFormat' = 'iceberg');
+USING DELTA;
 
 CREATE TABLE IF NOT EXISTS ${catalog}.${schema_reference}.adjustment_factors (
     VERSION STRING,
@@ -138,15 +110,11 @@ CREATE TABLE IF NOT EXISTS ${catalog}.${schema_reference}.adjustment_factors (
     DEMOGRAPHIC_FACTOR DOUBLE,
     TIME_PERIOD INT,
     CREATED_DATE TIMESTAMP,
-    CREATED_BY VARCHAR(::),
+    CREATED_BY STRING,
     UPDATED_DATE TIMESTAMP,
-    UPDATED_BY VARCHAR(::)
+    UPDATED_BY STRING
 )
-USING DELTA
-WITH SERDEPROPERTIES(
-    'delta.columnMapping.mode' = 'name',
-    'delta.enableIcebergCompat2' = 'true',
-    'delta.universalFormat.enabledFormat' = 'iceberg');
+USING DELTA;
 
 CREATE TABLE IF NOT EXISTS ${catalog}.${schema_reference}.coefficient_scores (
     VERSION STRING,
@@ -155,15 +123,11 @@ CREATE TABLE IF NOT EXISTS ${catalog}.${schema_reference}.coefficient_scores (
     COEFFICIENT DOUBLE,
     SCORE DOUBLE,
     CREATED_DATE TIMESTAMP,
-    CREATED_BY VARCHAR(::),
+    CREATED_BY STRING,
     UPDATED_DATE TIMESTAMP,
-    UPDATED_BY VARCHAR(::)
+    UPDATED_BY STRING
 )
-USING DELTA
-WITH SERDEPROPERTIES(
-    'delta.columnMapping.mode' = 'name',
-    'delta.enableIcebergCompat2' = 'true',
-    'delta.universalFormat.enabledFormat' = 'iceberg');
+USING DELTA;
 
 CREATE TABLE IF NOT EXISTS ${catalog}.${schema_reference}.community_model_rules (
     MODEL STRING,
@@ -172,15 +136,11 @@ CREATE TABLE IF NOT EXISTS ${catalog}.${schema_reference}.community_model_rules 
     SNCO_MCP STRING,
     SNCO_SUPPLEMENTAL_AMR STRING,
     CREATED_DATE TIMESTAMP,
-    CREATED_BY VARCHAR(::),
+    CREATED_BY STRING,
     UPDATED_DATE TIMESTAMP,
-    UPDATED_BY VARCHAR(::)
+    UPDATED_BY STRING
 )
-USING DELTA
-WITH SERDEPROPERTIES(
-    'delta.columnMapping.mode' = 'name',
-    'delta.enableIcebergCompat2' = 'true',
-    'delta.universalFormat.enabledFormat' = 'iceberg');
+USING DELTA;
 
 CREATE TABLE IF NOT EXISTS ${catalog}.${schema_reference}.hierarchy_config (
     VERSION STRING,
@@ -188,15 +148,11 @@ CREATE TABLE IF NOT EXISTS ${catalog}.${schema_reference}.hierarchy_config (
     CHILD STRING,
     HIERARCHY_NUM INT,
     CREATED_DATE TIMESTAMP,
-    CREATED_BY VARCHAR(::),
+    CREATED_BY STRING,
     UPDATED_DATE TIMESTAMP,
-    UPDATED_BY VARCHAR(::)
+    UPDATED_BY STRING
 )
-USING DELTA
-WITH SERDEPROPERTIES(
-    'delta.columnMapping.mode' = 'name',
-    'delta.enableIcebergCompat2' = 'true',
-    'delta.universalFormat.enabledFormat' = 'iceberg');
+USING DELTA;
 
 -- DDL for ${catalog}.${schema_reference}.icd_hcc_mapping
 CREATE TABLE IF NOT EXISTS ${catalog}.${schema_reference}.icd_hcc_mapping (
@@ -209,23 +165,19 @@ CREATE TABLE IF NOT EXISTS ${catalog}.${schema_reference}.icd_hcc_mapping (
     OM8_HCC_MODEL_CATEGORY_V28 INT,
     RARCC_MODEL_CATEGORY_V05 INT,
     RARCC_MODEL_CATEGORY_V03 INT,
-    OM8_HCC_ERRD_MODEL_CATEGORY_V21_FOR_2025_PAYMENT_YEAR VARCHAR(::),
-    OM8_HCC_ERRD_MODEL_CATEGORY_V24_FOR_2025_PAYMENT_YEAR VARCHAR(::),
-    OM8_HCC_MODEL_CATEGORY_V22_FOR_2025_PAYMENT_YEAR VARCHAR(::),
-    OM8_HCC_MODEL_CATEGORY_V24_FOR_2025_PAYMENT_YEAR VARCHAR(::),
-    OM8_HCC_MODEL_CATEGORY_V28_FOR_2025_PAYMENT_YEAR VARCHAR(::),
-    RARCC_MODEL_CATEGORY_V05_FOR_2025_PAYMENT_YEAR VARCHAR(::),
-    RARCC_MODEL_CATEGORY_V03_FOR_2025_PAYMENT_YEAR VARCHAR(::),
+    OM8_HCC_ERRD_MODEL_CATEGORY_V21_FOR_2025_PAYMENT_YEAR STRING,
+    OM8_HCC_ERRD_MODEL_CATEGORY_V24_FOR_2025_PAYMENT_YEAR STRING,
+    OM8_HCC_MODEL_CATEGORY_V22_FOR_2025_PAYMENT_YEAR STRING,
+    OM8_HCC_MODEL_CATEGORY_V24_FOR_2025_PAYMENT_YEAR STRING,
+    OM8_HCC_MODEL_CATEGORY_V28_FOR_2025_PAYMENT_YEAR STRING,
+    RARCC_MODEL_CATEGORY_V05_FOR_2025_PAYMENT_YEAR STRING,
+    RARCC_MODEL_CATEGORY_V03_FOR_2025_PAYMENT_YEAR STRING,
     CREATED_DATE TIMESTAMP,
-    CREATED_BY VARCHAR(::),
+    CREATED_BY STRING,
     UPDATED_DATE TIMESTAMP,
-    UPDATED_BY VARCHAR(::)
+    UPDATED_BY STRING
 )
-USING DELTA
-WITH SERDEPROPERTIES(
-    'delta.columnMapping.mode' = 'name',
-    'delta.enableIcebergCompat2' = 'true',
-    'delta.universalFormat.enabledFormat' = 'iceberg');
+USING DELTA;
 
 CREATE TABLE IF NOT EXISTS ${catalog}.${schema_reference}.interaction_coefficients (
     MODEL STRING,
@@ -234,15 +186,11 @@ CREATE TABLE IF NOT EXISTS ${catalog}.${schema_reference}.interaction_coefficien
     INTERACTION_GROUP_SECONDARY STRING,
     SCORE DOUBLE,
     CREATED_DATE TIMESTAMP,
-    CREATED_BY VARCHAR(::),
+    CREATED_BY STRING,
     UPDATED_DATE TIMESTAMP,
-    UPDATED_BY VARCHAR(::)
+    UPDATED_BY STRING
 )
-USING DELTA
-WITH SERDEPROPERTIES(
-    'delta.columnMapping.mode' = 'name',
-    'delta.enableIcebergCompat2' = 'true',
-    'delta.universalFormat.enabledFormat' = 'iceberg');
+USING DELTA;
 
 CREATE TABLE IF NOT EXISTS ${catalog}.${schema_reference}.procedure_codes (
     HCPCS_CPT_CODE STRING,
@@ -253,13 +201,7 @@ CREATE TABLE IF NOT EXISTS ${catalog}.${schema_reference}.procedure_codes (
     UPDATED_DATE TIMESTAMP,
     UPDATED_BY STRING
 )
-USING DELTA
-WITH SERDEPROPERTIES(
-    'delta.columnMapping.mode' = 'name',
-    'delta.enableIcebergCompat2' = 'true',
-    'delta.universalFormat.enabledFormat' = 'iceberg',
-    'tag.usage_status' = 'not_used_in_code',
-    'tag.purpose' = 'reference_future_use');
+USING DELTA;
 
 CREATE TABLE IF NOT EXISTS ${catalog}.${schema_reference}.ref_risk_proc_qualifying (
     CPT_AND_HCPCS_CD STRING,
@@ -267,141 +209,105 @@ CREATE TABLE IF NOT EXISTS ${catalog}.${schema_reference}.ref_risk_proc_qualifyi
     MA_EFFECTIVE_DATE DATE,
     OM8_ELIGIBILITY_FLAG STRING,
     CREATED_DATE TIMESTAMP,
-    CREATED_BY VARCHAR(::),
+    CREATED_BY STRING,
     UPDATED_DATE TIMESTAMP,
-    UPDATED_BY VARCHAR(::)
+    UPDATED_BY STRING
 )
-USING DELTA
-WITH SERDEPROPERTIES(
-    'delta.columnMapping.mode' = 'name',
-    'delta.enableIcebergCompat2' = 'true',
-    'delta.universalFormat.enabledFormat' = 'iceberg');
+USING DELTA;
 
 CREATE TABLE IF NOT EXISTS ${catalog}.${schema_reference}.ref_risk_hcc (
     OJ_ID INT,
-    PROGRAM VARCHAR(),
-    OJ_CODE VARCHAR(),
-    OJ_DESCRIPTION VARCHAR(),
+    PROGRAM STRING,
+    OJ_CODE STRING,
+    OJ_DESCRIPTION STRING,
     CATEGORY_ID SMALLINT,
-    Notes VARCHAR(),
+    Notes STRING,
     CREATED_DATE TIMESTAMP,
-    CREATED_BY VARCHAR(::),
+    CREATED_BY STRING,
     UPDATED_DATE TIMESTAMP,
-    UPDATED_BY VARCHAR(::)
+    UPDATED_BY STRING
 )
-USING DELTA
-WITH SERDEPROPERTIES(
-    'delta.columnMapping.mode' = 'name',
-    'delta.enableIcebergCompat2' = 'true',
-    'delta.universalFormat.enabledFormat' = 'iceberg',
-    'tag.usage_status' = 'not_used_in_code',
-    'tag.purpose' = 'reference_future_use');
+USING DELTA;
 
 CREATE TABLE IF NOT EXISTS ${catalog}.${schema_reference}.ref_risk_subco (
     SUBCO BIGINT,
-    SUBCO_DESCRIPTION VARCHAR(::),
+    SUBCO_DESCRIPTION STRING,
     CATEGORY_ID SMALLINT,
     OUTWORKSSTART INT,
     OUTWORKSEND INT,
     CHRONIC TINYINT,
     CREATED_DATE TIMESTAMP,
-    CREATED_BY VARCHAR(::),
+    CREATED_BY STRING,
     UPDATED_DATE TIMESTAMP,
-    UPDATED_BY VARCHAR(::)
+    UPDATED_BY STRING
 )
-USING DELTA
-WITH SERDEPROPERTIES(
-    'delta.columnMapping.mode' = 'name',
-    'delta.enableIcebergCompat2' = 'true',
-    'delta.universalFormat.enabledFormat' = 'iceberg',
-    'tag.usage_status' = 'not_used_in_code',
-    'tag.purpose' = 'reference_future_use');
+USING DELTA;
 
 CREATE TABLE IF NOT EXISTS ${catalog}.${schema_reference}.ref_saa_model (
     RAR_MODEL_VERSION_ID SMALLINT,
-    RAR_MODEL_VERSION VARCHAR(::),
+    RAR_MODEL_VERSION STRING,
     RAR_MODEL_YEAR SMALLINT,
     MODEL_BENEFIT TINYINT,
-    PROGRAM_MODEL VARCHAR(),
-    VERSION_CODE VARCHAR(),
+    PROGRAM_MODEL STRING,
+    VERSION_CODE STRING,
     CREATED_DATE TIMESTAMP,
-    CREATED_BY VARCHAR(::),
+    CREATED_BY STRING,
     UPDATED_DATE TIMESTAMP,
-    UPDATED_BY VARCHAR(::)
+    UPDATED_BY STRING
 )
-USING DELTA
-WITH SERDEPROPERTIES(
-    'delta.columnMapping.mode' = 'name',
-    'delta.enableIcebergCompat2' = 'true',
-    'delta.universalFormat.enabledFormat' = 'iceberg');
+USING DELTA;
 
 CREATE TABLE IF NOT EXISTS ${catalog}.${schema_reference}.ref_visit_type_rhcc (
     VISIT_TYPE_ID SMALLINT,
-    VISIT_TYPE_DESC VARCHAR(::),
-    RHCC_CD VARCHAR(),
-    RHCC_CD_DESC VARCHAR(),
-    HCPCS_CD VARCHAR(),
+    VISIT_TYPE_DESC STRING,
+    RHCC_CD STRING,
+    RHCC_CD_DESC STRING,
+    HCPCS_CD STRING,
     HCPCS_CD_END_DT DATE,
     CREATED_DATE TIMESTAMP,
-    CREATED_BY VARCHAR(::),
+    CREATED_BY STRING,
     UPDATED_DATE TIMESTAMP,
-    UPDATED_BY VARCHAR(::)
+    UPDATED_BY STRING
 )
-USING DELTA
-WITH SERDEPROPERTIES(
-    'delta.columnMapping.mode' = 'name',
-    'delta.enableIcebergCompat2' = 'true',
-    'delta.universalFormat.enabledFormat' = 'iceberg');
+USING DELTA;
 
 CREATE TABLE IF NOT EXISTS ${catalog}.${schema_reference}.ref_place_of_service_hob (
-    TYPE_OF_BILL_CD VARCHAR(),
-    PLACE_OF_SERVICE VARCHAR(),
-    POS_DESC VARCHAR(),
+    TYPE_OF_BILL_CD STRING,
+    PLACE_OF_SERVICE STRING,
+    POS_DESC STRING,
     CREATED_DATE TIMESTAMP,
-    CREATED_BY VARCHAR(::),
+    CREATED_BY STRING,
     UPDATED_DATE TIMESTAMP,
-    UPDATED_BY VARCHAR(::)
+    UPDATED_BY STRING
 )
-USING DELTA
-WITH SERDEPROPERTIES(
-    'delta.columnMapping.mode' = 'name',
-    'delta.enableIcebergCompat2' = 'true',
-    'delta.universalFormat.enabledFormat' = 'iceberg');
+USING DELTA;
 
 CREATE TABLE IF NOT EXISTS ${catalog}.${schema_reference}.ref_chronic_condition (
     RAR_MODEL_YEAR INT,
-    RAR_MODEL_VERSION VARCHAR(),
-    MODEL_VERSION VARCHAR(),
+    RAR_MODEL_VERSION STRING,
+    MODEL_VERSION STRING,
     CC_ID INT,
-    CC_CODE VARCHAR(),
-    CC_DESCRIPTION VARCHAR(),
+    CC_CODE STRING,
+    CC_DESCRIPTION STRING,
     CHRONIC TINYINT,
     CREATED_DATE TIMESTAMP,
-    CREATED_BY VARCHAR(::),
+    CREATED_BY STRING,
     UPDATED_DATE TIMESTAMP,
-    UPDATED_BY VARCHAR(::)
+    UPDATED_BY STRING
 )
-USING DELTA
-WITH SERDEPROPERTIES(
-    'delta.columnMapping.mode' = 'name',
-    'delta.enableIcebergCompat2' = 'true',
-    'delta.universalFormat.enabledFormat' = 'iceberg');
+USING DELTA;
 
 CREATE TABLE IF NOT EXISTS ${catalog}.${schema_reference}.ref_bid_mapping (
-    PREFIX VARCHAR(),
-    STARTING_SERIES VARCHAR(),
-    CLAIM_TYPE VARCHAR(),
-    CLAIM_SOURCE VARCHAR(),
+    PREFIX STRING,
+    STARTING_SERIES STRING,
+    CLAIM_TYPE STRING,
+    CLAIM_SOURCE STRING,
     CREATED_DATE TIMESTAMP,
-    CREATED_BY VARCHAR(::),
+    CREATED_BY STRING,
     UPDATED_DATE TIMESTAMP,
-    UPDATED_BY VARCHAR(::)
+    UPDATED_BY STRING
 )
-USING DELTA
-WITH SERDEPROPERTIES(
-    'delta.columnMapping.mode' = 'name',
-    'delta.enableIcebergCompat2' = 'true',
-    'delta.universalFormat.enabledFormat' = 'iceberg');
+USING DELTA;
 
 CREATE TABLE IF NOT EXISTS ${catalog}.${schema_reference}.ref_mor_health_event_confidence (
     CHRONIC TINYINT,
@@ -409,201 +315,154 @@ CREATE TABLE IF NOT EXISTS ${catalog}.${schema_reference}.ref_mor_health_event_c
     PRIOR_YEAR TINYINT,
     RECORD_YEAR_PRIOR INT,
     CREATED_DATE TIMESTAMP,
-    CREATED_BY VARCHAR(::),
+    CREATED_BY STRING,
     UPDATED_DATE TIMESTAMP,
-    UPDATED_BY VARCHAR(::)
+    UPDATED_BY STRING
 )
-USING DELTA
-WITH SERDEPROPERTIES(
-    'delta.columnMapping.mode' = 'name',
-    'delta.enableIcebergCompat2' = 'true',
-    'delta.universalFormat.enabledFormat' = 'iceberg');
+USING DELTA;
 
 CREATE TABLE IF NOT EXISTS ${catalog}.${schema_reference}.ref_home_plan (
-    HOME_PLAN_ID_CD VARCHAR() NOT NULL,
-    HOME_PLAN_DESCRIPTION VARCHAR(::),
-    HOLDING_COMPANY_CODE VARCHAR(),
-    HOLDING_COMPANY_DESCRIPTION VARCHAR(::),
+    HOME_PLAN_ID_CD STRING NOT NULL,
+    HOME_PLAN_DESCRIPTION STRING,
+    HOLDING_COMPANY_CODE STRING,
+    HOLDING_COMPANY_DESCRIPTION STRING,
     IS_ACTIVE_PLAN BOOLEAN NOT NULL,
     IS_SUPPLEMENTAL_PLAN BOOLEAN NOT NULL,
     EFFECTIVE_DATE DATE,
     EXPIRATION_DATE DATE,
     CREATED_DATE TIMESTAMP,
-    CREATED_BY VARCHAR(::),
+    CREATED_BY STRING,
     UPDATED_DATE TIMESTAMP,
-    UPDATED_BY VARCHAR(::)
+    UPDATED_BY STRING
 )
-USING DELTA
-WITH SERDEPROPERTIES(
-    'delta.columnMapping.mode' = 'name',
-    'delta.enableIcebergCompat2' = 'true',
-    'delta.universalFormat.enabledFormat' = 'iceberg');
+USING DELTA;
 
 CREATE TABLE IF NOT EXISTS ${catalog}.${schema_reference}.ref_home_plan_contract (
-    HOME_PLAN_ID_CD VARCHAR() NOT NULL,
-    HOME_PLAN_DESCRIPTION VARCHAR(::),
-    CONTRACT_ID VARCHAR() NOT NULL,
-    CONTRACT_DESCRIPTION VARCHAR(::),
+    HOME_PLAN_ID_CD STRING NOT NULL,
+    HOME_PLAN_DESCRIPTION STRING,
+    CONTRACT_ID STRING NOT NULL,
+    CONTRACT_DESCRIPTION STRING,
     CONTRACT_START_DATE DATE,
     CONTRACT_END_DATE DATE,
     IS_ACTIVE BOOLEAN NOT NULL,
     HSI_VMARK_REQUIRED BOOLEAN NOT NULL,
     CREATED_DATE TIMESTAMP,
-    CREATED_BY VARCHAR(::),
+    CREATED_BY STRING,
     UPDATED_DATE TIMESTAMP,
-    UPDATED_BY VARCHAR(::)
+    UPDATED_BY STRING
 )
-USING DELTA
-WITH SERDEPROPERTIES(
-    'delta.columnMapping.mode' = 'name',
-    'delta.enableIcebergCompat2' = 'true',
-    'delta.universalFormat.enabledFormat' = 'iceberg');
+USING DELTA;
 
 CREATE TABLE IF NOT EXISTS ${catalog}.${schema_reference}.ref_claim_type (
-    CLAIM_TP_CD VARCHAR(),
-    CLAIM_TYPE_CHG() NOT NULL,
-    CLAIM_TYPE_DESC VARCHAR(::),
-    MA_PROC_TYPE VARCHAR(::),
+    CLAIM_TP_CD STRING,
+    CLAIM_TYPE_CHG STRING NOT NULL,
+    CLAIM_TYPE_DESC STRING,
+    MA_PROC_TYPE STRING,
     CLAIM_CD BIGINT,
     CREATED_DATE TIMESTAMP,
-    CREATED_BY VARCHAR(::),
+    CREATED_BY STRING,
     UPDATED_DATE TIMESTAMP,
-    UPDATED_BY VARCHAR(::)
+    UPDATED_BY STRING
 )
-USING DELTA
-WITH SERDEPROPERTIES(
-    'delta.columnMapping.mode' = 'name',
-    'delta.enableIcebergCompat2' = 'true',
-    'delta.universalFormat.enabledFormat' = 'iceberg');
+USING DELTA;
 
 CREATE TABLE IF NOT EXISTS ${catalog}.${schema_reference}.ref_method_frequency (
     METHOD_ID SMALLINT NOT NULL,
-    PROGRAM VARCHAR() NOT NULL,
-    PROGRAM_MODEL VARCHAR(),
-    CLAIM_CD_TYPE VARCHAR(),
-    CLAIM_CD VARCHAR(),
-    CLAIM_CD_MODIFIER_TYPE VARCHAR() ,
-    CLAIM_CD_MODIFIER VARCHAR(),
+    PROGRAM STRING NOT NULL,
+    PROGRAM_MODEL STRING,
+    CLAIM_CD_TYPE STRING,
+    CLAIM_CD STRING,
+    CLAIM_CD_MODIFIER_TYPE STRING,
+    CLAIM_CD_MODIFIER STRING,
     SUBCO BIGINT,
     FREQUENCY INT,
-    PERCENT_WEIGHT DECIMAL(, ) ,
+    PERCENT_WEIGHT DECIMAL(18,6),
     CREATED_DATE TIMESTAMP,
-    CREATED_BY VARCHAR(::),
+    CREATED_BY STRING,
     UPDATED_DATE TIMESTAMP,
-    UPDATED_BY VARCHAR(::)
+    UPDATED_BY STRING
 )
-USING DELTA
-WITH SERDEPROPERTIES(
-    'delta.columnMapping.mode' = 'name',
-    'delta.enableIcebergCompat2' = 'true',
-    'delta.universalFormat.enabledFormat' = 'iceberg');
+USING DELTA;
 
 CREATE TABLE IF NOT EXISTS ${catalog}.${schema_reference}.ref_method_metadata_codegroups (
     RISK_CD INT,
-    CLAIM_CD_TYPE VARCHAR() NOT NULL,
-    CLAIM_CD VARCHAR() NOT NULL,
-    CODE VARCHAR() NOT NULL,
+    CLAIM_CD_TYPE STRING NOT NULL,
+    CLAIM_CD STRING NOT NULL,
+    CODE STRING NOT NULL,
+    ICD_VER STRING,
     CREATED_DATE TIMESTAMP,
-    CREATED_BY VARCHAR(::),
+    CREATED_BY STRING,
     UPDATED_DATE TIMESTAMP,
-    UPDATED_BY VARCHAR(::)
+    UPDATED_BY STRING
 )
 USING DELTA
-WITH SERDEPROPERTIES(
-    'delta.columnMapping.mode' = 'name',
-    'delta.enableIcebergCompat2' = 'true',
-    'delta.universalFormat.enabledFormat' = 'iceberg')
 PARTITIONED BY (ICD_VER);
 
 CREATE TABLE IF NOT EXISTS ${catalog}.${schema_reference}.ref_risk_csf (
-    OBR_INDICATOR VARCHAR() NOT NULL,
-    OBR_DESCRIPTION VARCHAR(),
+    OBR_INDICATOR STRING NOT NULL,
+    OBR_DESCRIPTION STRING,
     CREATED_DATE TIMESTAMP,
-    CREATED_BY VARCHAR(::),
+    CREATED_BY STRING,
     UPDATED_DATE TIMESTAMP,
-    UPDATED_BY VARCHAR(::)
+    UPDATED_BY STRING
 )
-USING DELTA
-WITH SERDEPROPERTIES(
-    'delta.columnMapping.mode' = 'name',
-    'delta.enableIcebergCompat2' = 'true',
-    'delta.universalFormat.enabledFormat' = 'iceberg');
+USING DELTA;
 
 CREATE TABLE IF NOT EXISTS ${catalog}.${schema_reference}.ref_risk_metal (
     METAL_ID SMALLINT NOT NULL,
-    METAL VARCHAR(),
-    METAL_DESCRIPTION VARCHAR() ,
+    METAL STRING,
+    METAL_DESCRIPTION STRING,
     CREATED_DATE TIMESTAMP,
-    CREATED_BY VARCHAR(::),
+    CREATED_BY STRING,
     UPDATED_DATE TIMESTAMP,
-    UPDATED_BY VARCHAR(::)
+    UPDATED_BY STRING
 )
-USING DELTA
-WITH SERDEPROPERTIES(
-    'delta.columnMapping.mode' = 'name',
-    'delta.enableIcebergCompat2' = 'true',
-    'delta.universalFormat.enabledFormat' = 'iceberg');
+USING DELTA;
 
 CREATE TABLE IF NOT EXISTS ${catalog}.${schema_reference}.ref_method_prior_year (
     LAST_DK_COVOYANCE INT NOT NULL,
     DK_FREQUENCY_MIN INT NOT NULL,
     DK_FREQUENCY_MAX INT,
-    PERCENT_WEIGHT DECIMAL(, ) NOT NULL,
+    PERCENT_WEIGHT DECIMAL(18,6) NOT NULL,
     CREATED_DATE TIMESTAMP,
-    CREATED_BY VARCHAR(::),
+    CREATED_BY STRING,
     UPDATED_DATE TIMESTAMP,
-    UPDATED_BY VARCHAR(::)
+    UPDATED_BY STRING
 )
 USING DELTA
-WITH SERDEPROPERTIES(
-    'delta.columnMapping.mode' = 'name',
-    'delta.enableIcebergCompat2' = 'true',
-    'delta.universalFormat.enabledFormat' = 'iceberg')
 PARTITIONED BY (LAST_DK_COVOYANCE);
 
 CREATE TABLE IF NOT EXISTS ${catalog}.${schema_reference}.ref_risk_type_detail (
-    RAR_MODEL_VERSION VARCHAR(),
-    RISK_TYPE_ID VARCHAR(),
-    RISK_TYPE_DESC VARCHAR(),
-    RISK_TYPE_DETAIL_ID VARCHAR(),
-    RISK_TYPE_DETAIL_DESC VARCHAR(),
-    NOTES VARCHAR(::),
+    RAR_MODEL_VERSION STRING,
+    RISK_TYPE_ID STRING,
+    RISK_TYPE_DESC STRING,
+    RISK_TYPE_DETAIL_ID STRING,
+    RISK_TYPE_DETAIL_DESC STRING,
+    NOTES STRING,
     CREATED_DATE TIMESTAMP,
-    CREATED_BY VARCHAR(::),
+    CREATED_BY STRING,
     UPDATED_DATE TIMESTAMP,
-    UPDATED_BY VARCHAR(::)
+    UPDATED_BY STRING
 )
-USING DELTA
-WITH SERDEPROPERTIES(
-    'delta.columnMapping.mode' = 'name',
-    'delta.enableIcebergCompat2' = 'true',
-    'delta.universalFormat.enabledFormat' = 'iceberg',
-    'tag.usage_status' = 'not_used_in_code',
-    'tag.purpose' = 'reference_future_use');
+USING DELTA;
 
 CREATE TABLE IF NOT EXISTS ${catalog}.${schema_reference}.ref_method (
     METHOD_ID SMALLINT NOT NULL,
-    METHOD_DESCRIPTION VARCHAR(::),
-    PROGRAM VARCHAR(),
-    NOTES VARCHAR(::),
+    METHOD_DESCRIPTION STRING,
+    PROGRAM STRING,
+    NOTES STRING,
     CREATED_DATE TIMESTAMP,
-    CREATED_BY VARCHAR(::),
+    CREATED_BY STRING,
     UPDATED_DATE TIMESTAMP,
-    UPDATED_BY VARCHAR(::)
+    UPDATED_BY STRING
 )
-USING DELTA
-WITH SERDEPROPERTIES(
-    'delta.columnMapping.mode' = 'name',
-    'delta.enableIcebergCompat2' = 'true',
-    'delta.universalFormat.enabledFormat' = 'iceberg',
-    'tag.usage_status' = 'not_used_in_code',
-    'tag.purpose' = 'reference_future_use');
+USING DELTA;
 
 CREATE TABLE IF NOT EXISTS ${catalog}.${schema_reference}.ref_interaction_sources (
     RISK_MODEL_TYPE STRING,
     RISK_MODEL_VERSION STRING,
-    RAR_MODEL_SEGMENT_STRING,
-    MODEL_SEGMENT_STRING,
+    RAR_MODEL_SEGMENT STRING,
+    MODEL_SEGMENT STRING,
     RISK_MODEL_SEGMENT_TYPE STRING,
     INTERACTION_TYPE STRING,
     INTERACTION_NAME STRING,
@@ -616,13 +475,7 @@ CREATE TABLE IF NOT EXISTS ${catalog}.${schema_reference}.ref_interaction_source
     UPDATED_DATE TIMESTAMP,
     UPDATED_BY STRING
 )
-USING DELTA
-WITH SERDEPROPERTIES(
-    'delta.columnMapping.mode' = 'name',
-    'delta.enableIcebergCompat2' = 'true',
-    'delta.universalFormat.enabledFormat' = 'iceberg',
-    'tag.usage_status' = 'not_used_in_code',
-    'tag.purpose' = 'reference_future_use');
+USING DELTA;
 
 CREATE TABLE IF NOT EXISTS ${catalog}.${schema_reference}.ref_interaction_scores (
     RISK_MODEL_TYPE STRING,
@@ -640,29 +493,21 @@ CREATE TABLE IF NOT EXISTS ${catalog}.${schema_reference}.ref_interaction_scores
     UPDATED_DATE TIMESTAMP,
     UPDATED_BY STRING
 )
-USING DELTA
-WITH SERDEPROPERTIES(
-    'delta.columnMapping.mode' = 'name',
-    'delta.enableIcebergCompat2' = 'true',
-    'delta.universalFormat.enabledFormat' = 'iceberg');
+USING DELTA;
 
 CREATE TABLE IF NOT EXISTS ${catalog}.${schema_reference}.ref_diag_chronic_condition (
     RAR_MODEL_YEAR INT,
-    RAR_MODEL_VERSION VARCHAR(),
-    OJ_CODE VARCHAR(),
-    OJ_DESCRIPTION VARCHAR(::),
-    DIAG_CODE VARCHAR(),
-    DIAG_DESCRIPTION VARCHAR(::),
+    RAR_MODEL_VERSION STRING,
+    OJ_CODE STRING,
+    OJ_DESCRIPTION STRING,
+    DIAG_CODE STRING,
+    DIAG_DESCRIPTION STRING,
     EFFECTIVE_DATE DATE,
     EXPIRATION DATE,
     CHRONIC TINYINT,
     CREATED_DATE TIMESTAMP,
-    CREATED_BY VARCHAR(::),
+    CREATED_BY STRING,
     UPDATED_DATE TIMESTAMP,
-    UPDATED_BY VARCHAR(::)
+    UPDATED_BY STRING
 )
-USING DELTA
-WITH SERDEPROPERTIES(
-    'delta.columnMapping.mode' = 'name',
-    'delta.enableIcebergCompat2' = 'true',
-    'delta.universalFormat.enabledFormat' = 'iceberg');
+USING DELTA;
