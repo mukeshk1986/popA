@@ -13,7 +13,7 @@ from src.spark.helpers.generic_util import ingestion_folder_check
 
 logger = get_logger()
 
-dbutils.widgets.dropdown("env", "DEV", ["DEV", "QA", "SIG", "PROD"])
+dbutils.widgets.dropdown("env", "DEV", ["DEV", "QA", "STG", "PROD"])
 dbutils.widgets.text("plan_name", "")
 dbutils.widgets.text("plan_onboarding_reference_schema", "")
 dbutils.widgets.text("plan_onboarding_schema_list", "")
@@ -163,7 +163,10 @@ def run_ddl_fixed(spark, sql_file_path, catalog, ref_schema, gap_schema_curation
     with open(sql_file_path) as f:
         sql_template = f.read()
     
-    sql_rendered = sql_template.replace("${catalog}", catalog).replace("${gap_schema_curation_supp}", gap_schema_curation_supp).replace("${gap_schema_curation}", gap_schema_curation).replace("${schema_curation}", schema_curation).replace("${schema_transformation}", schema_transformation).replace("${env_bucket}", env_bucket).replace("${schema_ingestion}", schema_ingestion).replace("${schema_plan_name}", v_schema_plan_name).replace("${schema_monitoring}", schema_monitoring).replace("${ma_dashboard_reference_schema}", ma_dashboard_ref_schema).replace("${schema_reference}", reference_schema_values[reference_schema_raw]).replace("${sam_work_schema}", sam_work_schema).replace("${sam_result_schema}", sam_result_schema).replace("${sam_stage_schema}", sam_stage_schema).replace("${sam_ref_schema}", sam_ref_schema).replace("${schema_curation_supp}", schema_curation_supp).replace("${schema_list}", schema_list)
+    sql_rendered = sql_template.replace("${catalog}", catalog).replace("${gap_schema_curation_supp}", gap_schema_curation_supp).replace("${gap_schema_curation}", gap_schema_curation).replace("${schema_curation}", schema_curation).replace("${schema_transformation}", schema_transformation).replace("${env_bucket}", env_bucket).replace("${schema_ingestion}", schema_ingestion).replace("${schema_plan_name}", v_schema_plan_name).replace("${schema_monitoring}", schema_monitoring).replace("${ma_dashboard_reference_schema}", ma_dashboard_ref_schema).replace("${schema_reference}", reference_schema_values[reference_schema_raw]).replace("${sam_work_schema}", sam_work_schema).replace("${sam_result_schema}", sam_result_schema).replace("${sam_stage_schema}", sam_stage_schema).replace("${sam_ref_schema}", sam_ref_schema).replace("${schema_curation_supp}", schema_curation_supp).replace("${schema_list}", schema_list).replace("${catalog}", catalog)
+    
+    # Fix VARCHAR() syntax error - replace with STRING
+    sql_rendered = re.sub(r'VARCHAR\(\s*\)', 'STRING', sql_rendered)
     
     # Fix SQL syntax: swap TBLPROPERTIES and PARTITIONED BY when they're in wrong order
     def find_balanced_parens(text, start_pos):
@@ -234,7 +237,34 @@ for ddl_file in ddl_files:
 
 # COMMAND ----------
 
-# MAGIC %sh ls -ltr /Workspace/Repos/DEV/popA/src/sql/ddl/ingestion_tables.sql
+# DBTITLE 1, Execute DDL to Create Tables
+
+from src.spark.helpers.generic_util import config_plan_setup
+
+logger.info("Starting table creation with DDL execution...")
+
+config_plan_setup(
+    spark=spark,
+    catalog=catalog,
+    ref_schema=ref_schema,
+    gap_schema_curation=gap_schema_curation,
+    schema_curation=schema_curation,
+    schema_transformation=schema_transformation,
+    env_bucket=env_bucket,
+    schema_ingestion=schema_ingestion,
+    schema_monitoring=schema_monitoring,
+    v_schema_plan_name=v_schema_plan_name,
+    ma_dashboard_ref_schema="ma_dashboard_reference",
+    sam_ref_schema=sam_ref_schema,
+    sam_stage_schema=sam_stage_schema,
+    sam_work_schema=sam_work_schema,
+    sam_result_schema=sam_result_schema,
+    schema_curation_supp=schema_curation_supp,
+    gap_schema_curation_supp=gap_schema_curation_supp,
+    schema_list=schema_list
+)
+
+logger.info("✓ Table creation completed successfully!")
 
 # COMMAND ----------
 
@@ -270,34 +300,3 @@ else:
     logger.info(
         "Skipping ingestion volume folder setup because plan_name is empty."
     )
-
-# COMMAND ----------
-
-# DBTITLE 1, Execute DDL to Create Tables
-
-from src.spark.helpers.generic_util import config_plan_setup
-
-logger.info("Starting table creation with DDL execution...")
-
-config_plan_setup(
-    spark=spark,
-    catalog=catalog,
-    ref_schema=ref_schema,
-    gap_schema_curation=gap_schema_curation,
-    schema_curation=schema_curation,
-    schema_transformation=schema_transformation,
-    env_bucket=env_bucket,
-    schema_ingestion=schema_ingestion,
-    schema_monitoring=schema_monitoring,
-    v_schema_plan_name=v_schema_plan_name,
-    ma_dashboard_ref_schema="ma_dashboard_reference",
-    sam_ref_schema=sam_ref_schema,
-    sam_stage_schema=sam_stage_schema,
-    sam_work_schema=sam_work_schema,
-    sam_result_schema=sam_result_schema,
-    schema_curation_supp=schema_curation_supp,
-    gap_schema_curation_supp=gap_schema_curation_supp,
-    schema_list=schema_list
-)
-
-logger.info("✓ Table creation completed successfully!")

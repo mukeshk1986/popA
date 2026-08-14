@@ -1,15 +1,4 @@
 -- =====================================================================================
--- Databricks Community / Free Edition variant (Unity Catalog managed storage, NO S3).
--- Managed schemas: the `MANAGED LOCATION 's3://...'` clause is omitted, so Unity Catalog
--- places each schema in the catalog's managed storage automatically.
--- Enterprise/S3 form was:
---   CREATE SCHEMA IF NOT EXISTS ${catalog}.${schema} managed location
---     's3://bhi-${env_bucket}-datalake-${schema_plan_name}<bronze|silver|gold>-us-east-1/${schema}';
--- NOTE: Free Edition may only allow schemas inside the pre-provisioned managed catalog
---       (e.g. `workspace`); set ${catalog} accordingly. Legacy Community Edition
---       (community.cloud.databricks.com) has no Unity Catalog and cannot run this.
--- =====================================================================================
-
 --all schema needed for plan onboarding and reference tables
 CREATE SCHEMA IF NOT EXISTS ${catalog}.${gap_schema_curation};
 
