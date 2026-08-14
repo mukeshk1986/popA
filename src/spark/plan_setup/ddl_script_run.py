@@ -13,7 +13,7 @@ from src.spark.helpers.generic_util import ingestion_folder_check
 
 logger = get_logger()
 
-dbutils.widgets.dropdown("env", "DEV", ["DEV", "QA", "SIG", "PROD"])
+dbutils.widgets.dropdown("env", "DEV", ["DEV", "QA", "STG", "PROD"])
 dbutils.widgets.text("plan_name", "")
 dbutils.widgets.text("plan_onboarding_reference_schema", "")
 dbutils.widgets.text("plan_onboarding_schema_list", "")
@@ -163,7 +163,10 @@ def run_ddl_fixed(spark, sql_file_path, catalog, ref_schema, gap_schema_curation
     with open(sql_file_path) as f:
         sql_template = f.read()
     
-    sql_rendered = sql_template.replace("${catalog}", catalog).replace("${gap_schema_curation_supp}", gap_schema_curation_supp).replace("${gap_schema_curation}", gap_schema_curation).replace("${schema_curation}", schema_curation).replace("${schema_transformation}", schema_transformation).replace("${env_bucket}", env_bucket).replace("${schema_ingestion}", schema_ingestion).replace("${schema_plan_name}", v_schema_plan_name).replace("${schema_monitoring}", schema_monitoring).replace("${ma_dashboard_reference_schema}", ma_dashboard_ref_schema).replace("${schema_reference}", reference_schema_values[reference_schema_raw]).replace("${sam_work_schema}", sam_work_schema).replace("${sam_result_schema}", sam_result_schema).replace("${sam_stage_schema}", sam_stage_schema).replace("${sam_ref_schema}", sam_ref_schema).replace("${schema_curation_supp}", schema_curation_supp).replace("${schema_list}", schema_list)
+    sql_rendered = sql_template.replace("${catalog}", catalog).replace("${gap_schema_curation_supp}", gap_schema_curation_supp).replace("${gap_schema_curation}", gap_schema_curation).replace("${schema_curation}", schema_curation).replace("${schema_transformation}", schema_transformation).replace("${env_bucket}", env_bucket).replace("${schema_ingestion}", schema_ingestion).replace("${schema_plan_name}", v_schema_plan_name).replace("${schema_monitoring}", schema_monitoring).replace("${ma_dashboard_reference_schema}", ma_dashboard_ref_schema).replace("${schema_reference}", reference_schema_values[reference_schema_raw]).replace("${sam_work_schema}", sam_work_schema).replace("${sam_result_schema}", sam_result_schema).replace("${sam_stage_schema}", sam_stage_schema).replace("${sam_ref_schema}", sam_ref_schema).replace("${schema_curation_supp}", schema_curation_supp).replace("${schema_list}", schema_list).replace("${catalog}", catalog)
+    
+    # Fix VARCHAR() syntax error - replace with STRING
+    sql_rendered = re.sub(r'VARCHAR\(\s*\)', 'STRING', sql_rendered)
     
     # Fix SQL syntax: swap TBLPROPERTIES and PARTITIONED BY when they're in wrong order
     def find_balanced_parens(text, start_pos):
@@ -234,7 +237,114 @@ for ddl_file in ddl_files:
 
 # COMMAND ----------
 
-# MAGIC %sh ls -ltr /Workspace/Repos/DEV/popA/src/sql/ddl/ingestion_tables.sql
+# DBTITLE 1, Execute DDL to Create Tables
+import os
+import re
+
+logger.info("Starting table creation with DDL execution...")
+
+repo_root = "/Workspace/Repos/DEV/popA"
+ddl_base_path = os.path.join(repo_root, "src/sql/ddl")
+
+ddl_groups = {
+    "schema_creation": ["schema_creation"],
+    "ingestion": ["ingestion_tables"],
+    "monitoring": ["monitoring_tables"],
+    "transformation_curation": ["transformation_curation_tables"],
+    "reference": ["ma_ra_reference_tables"],
+    "ma_dashboard": ["ma_dashboard_ref_tables"]
+}
+
+reference_schema_values = {"ma": "ma_reference", "aca": "aca_reference"}
+ma_dashboard_schema_values = {"ma_dashboard": "ma_dashboard_reference"}
+
+ddl_files = []
+for schema_name in schema_list:
+    schema_key = schema_name.strip().lower()
+    if schema_key in ddl_groups:
+        for ddl in ddl_groups[schema_key]:
+            if ddl not in ddl_files:
+                ddl_files.append(ddl)
+    elif schema_key in reference_schema_values:
+        for ddl in ddl_groups["reference"]:
+            if ddl not in ddl_files:
+                ddl_files.append(ddl)
+    elif schema_key in ma_dashboard_schema_values:
+        for ddl in ddl_groups["ma_dashboard"]:
+            if ddl not in ddl_files:
+                ddl_files.append(ddl)
+
+logger.info(f"schema_list : {schema_list}")
+logger.info(f"ddl_files : {ddl_files}")
+
+schema_list_str = ",".join(schema_list) if isinstance(schema_list, list) else schema_list
+
+def run_ddl_fixed(spark, sql_file_path, catalog, ref_schema, gap_schema_curation, schema_curation, schema_transformation, env_bucket, schema_ingestion, schema_monitoring, v_schema_plan_name, ma_dashboard_ref_schema, sam_ref_schema, sam_stage_schema, sam_work_schema, sam_result_schema, schema_curation_supp, gap_schema_curation_supp, schema_list, reference_schema_value):
+    with open(sql_file_path) as f:
+        sql_template = f.read()
+    
+    sql_rendered = sql_template.replace("${catalog}", catalog).replace("${gap_schema_curation_supp}", gap_schema_curation_supp).replace("${gap_schema_curation}", gap_schema_curation).replace("${schema_curation}", schema_curation).replace("${schema_transformation}", schema_transformation).replace("${env_bucket}", env_bucket).replace("${schema_ingestion}", schema_ingestion).replace("${schema_plan_name}", v_schema_plan_name).replace("${schema_monitoring}", schema_monitoring).replace("${ma_dashboard_reference_schema}", ma_dashboard_ref_schema).replace("${schema_reference}", reference_schema_value).replace("${sam_work_schema}", sam_work_schema).replace("${sam_result_schema}", sam_result_schema).replace("${sam_stage_schema}", sam_stage_schema).replace("${sam_ref_schema}", sam_ref_schema).replace("${schema_curation_supp}", schema_curation_supp).replace("${schema_list}", schema_list)
+    
+    sql_rendered = re.sub(r'VARCHAR\(\s*\)', 'STRING', sql_rendered)
+    
+    def find_balanced_parens(text, start_pos):
+        if text[start_pos] != '(':
+            return -1
+        depth = 0
+        for i in range(start_pos, len(text)):
+            if text[i] == '(':
+                depth += 1
+            elif text[i] == ')':
+                depth -= 1
+                if depth == 0:
+                    return i
+        return -1
+    
+    offset = 0
+    while True:
+        pattern = re.compile(r'USING\s+DELTA\s+TBLPROPERTIES\s*\(', re.IGNORECASE)
+        match = pattern.search(sql_rendered, offset)
+        
+        if not match:
+            break
+            
+        tblprops_start = match.end() - 1
+        tblprops_end = find_balanced_parens(sql_rendered, tblprops_start)
+        
+        if tblprops_end == -1:
+            offset = match.end()
+            continue
+        
+        tblprops_clause = sql_rendered[match.start():tblprops_end+1]
+        
+        remaining = sql_rendered[tblprops_end+1:]
+        part_match = re.match(r'\s*(PARTITIONED\s+BY\s*\([^)]+\))', remaining, re.IGNORECASE)
+        
+        if part_match:
+            partitioned_clause = part_match.group(1)
+            before = sql_rendered[:match.start()]
+            after = sql_rendered[tblprops_end+1+part_match.end():]
+            sql_rendered = before + "USING DELTA " + partitioned_clause + " " + tblprops_clause[len("USING DELTA "):] + after
+            offset = len(before) + len("USING DELTA ") + len(partitioned_clause) + 1 + len(tblprops_clause) - len("USING DELTA ")
+        else:
+            offset = match.end()
+    
+    statements = [stat.strip() for stat in re.split(r";\s*\n", sql_rendered) if stat.strip()]
+    
+    for i, stat in enumerate(statements, 1):
+        try:
+            spark.sql(stat)
+        except Exception as e:
+            print(f"\nERROR: Statement {i} failed with error: {e}")
+            print(f"\nFailing statement:\n{stat}")
+            raise
+
+for ddl_file in ddl_files:
+    ddl_file_path = os.path.join(ddl_base_path, ddl_file + ".sql")
+    logger.info(f"****** Execution Started : {ddl_file_path}")
+    run_ddl_fixed(spark, ddl_file_path, catalog, ref_schema, gap_schema_curation, schema_curation, schema_transformation, env_bucket, schema_ingestion, schema_monitoring, v_schema_plan_name, ref_schema, sam_ref_schema, sam_stage_schema, sam_work_schema, sam_result_schema, schema_curation_supp, gap_schema_curation_supp, schema_list_str, reference_schema_values.get(reference_schema_raw, ref_schema))
+
+logger.info("✓ Table creation completed successfully!")
 
 # COMMAND ----------
 
@@ -270,34 +380,3 @@ else:
     logger.info(
         "Skipping ingestion volume folder setup because plan_name is empty."
     )
-
-# COMMAND ----------
-
-# DBTITLE 1, Execute DDL to Create Tables
-
-from src.spark.helpers.generic_util import config_plan_setup
-
-logger.info("Starting table creation with DDL execution...")
-
-config_plan_setup(
-    spark=spark,
-    catalog=catalog,
-    ref_schema=ref_schema,
-    gap_schema_curation=gap_schema_curation,
-    schema_curation=schema_curation,
-    schema_transformation=schema_transformation,
-    env_bucket=env_bucket,
-    schema_ingestion=schema_ingestion,
-    schema_monitoring=schema_monitoring,
-    v_schema_plan_name=v_schema_plan_name,
-    ma_dashboard_ref_schema="ma_dashboard_reference",
-    sam_ref_schema=sam_ref_schema,
-    sam_stage_schema=sam_stage_schema,
-    sam_work_schema=sam_work_schema,
-    sam_result_schema=sam_result_schema,
-    schema_curation_supp=schema_curation_supp,
-    gap_schema_curation_supp=gap_schema_curation_supp,
-    schema_list=schema_list
-)
-
-logger.info("✓ Table creation completed successfully!")
