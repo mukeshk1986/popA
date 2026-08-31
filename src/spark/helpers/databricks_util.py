@@ -52,18 +52,18 @@ def get_curation_schema(plan_name: str, incl_supplemental_mmr: str, incl_pseudo_
 
 def get_gap_curation_schema(plan_name: str, incl_supplemental_mmr: str) -> str:
     """Resolves the gap curation schema for a scoring/gap run, mirroring get_curation_schema for supplemental segregation.
-    
+
     Non-supplemental runs use (plan_name)_gap_curation (unchanged).
     Supplemental runs use (plan_name)_gap_curation_supp.
-    
+
     Args:
         plan_name (str): The plan name (e.g. "uatplan1", "non_anthem").
         incl_supplemental_mmr (str): Run type flag, "Y" for supplemental.
-    
+
     Returns:
         str: The resolved gap curation schema name.
     """
-    v_plan_name = get_pla_name(plan_name)
+    v_plan_name = get_plan_name(plan_name)
     suffix = "gap_curation_supp" if str(incl_supplemental_mmr).upper() == "Y" else "gap_curation"
     return v_plan_name + suffix
 
