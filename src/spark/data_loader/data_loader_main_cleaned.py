@@ -143,6 +143,7 @@ def match_inbox_file(all_files, table_name: str):
 # DBTITLE 1,Load non-supplemental files from inbox
 try:
     logger.info(f"testing---------------:  {src_file_dir}")
+    src_file_dir = ingestion_file_dir
     inbox_files = dbutils.fs.ls(src_file_dir)
 except Exception as list_err:
     logger.error(f"Failed to list inbox directory [{src_file_dir}]: {list_err}")
