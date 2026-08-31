@@ -1,6 +1,7 @@
 # Databricks notebook source
 # /// script
 # [tool.databricks.environment]
+# base_environment = "databricks_ai_v5"
 # environment_version = "5"
 # ///
 # MAGIC %md
@@ -141,6 +142,7 @@ def match_inbox_file(all_files, table_name: str):
 
 # DBTITLE 1,Load non-supplemental files from inbox
 try:
+    logger.info(f"testing---------------:  {src_file_dir}")
     inbox_files = dbutils.fs.ls(src_file_dir)
 except Exception as list_err:
     logger.error(f"Failed to list inbox directory [{src_file_dir}]: {list_err}")
@@ -159,6 +161,7 @@ for table_name in non_supplemental_tables:
     logger.info(f"Processing table: {table_name}; file: {matched_file.path}")
     try:
         expected_schema = build_expected_schema(expected_schema_config, table_name)
+        logger.info(f"testing before csv---------------{table_name}: Archived {matched_file.name}")
         df_tbl = load_csv(spark, matched_file.path, expected_schema, header=False)
         write_table(df_tbl, spark, target_schema, table_name, mode="overwrite")
         processed_tables.add(table_name)
@@ -168,6 +171,7 @@ for table_name in non_supplemental_tables:
         continue
 
     try:
+        logger.info(f"testing---------------{table_name}: Archived {matched_file.name}")
         dbutils.fs.mv(matched_file.path, f"{archive_dir}/{matched_file.name}")
         logger.info(f"{table_name}: Archived {matched_file.name}")
     except Exception as archive_err:
