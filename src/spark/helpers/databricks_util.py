@@ -28,24 +28,24 @@ def get_plan_name(plan_name: str) -> str:
 
 def get_curation_schema(plan_name: str, incl_supplemental_mmr: str, incl_pseudo_claim: str = "N") -> str:
     """Resolves the curation schema for a scoring run, segregating supplemental from non-supplemental output.
-    
+
     Non-supplemental runs write to (plan_name)_curation (unchanged behavior).
     Supplemental runs write to (plan_name)_curation_supp so the two run types are physically isolated.
     Supplemental has two feeds - MMR supplemental (incl_supplemental_mmr) and MAO pseudo-claims (incl_pseudo_claim) -
     and a run is treated as supplemental when EITHER flag is "Y".
     This is the single decision point for supplemental vs non-supplemental output routing.
     For non_anthem the prefix is empty, yielding "curation" or "curation_supp".
-    
+
     Args:
         plan_name (str): The plan name (e.g. "uatplan1", "non_anthem").
         incl_supplemental_mmr (str): MMR supplemental run flag, "Y" for supplemental.
         incl_pseudo_claim (str): MAO pseudo-claim run flag, "Y" for supplemental.
             Defaults to "N" so callers that do not segregate on pseudo-claims keep their existing behavior.
-    
+
     Returns:
         str: The resolved curation schema name.
     """
-    v_plan_name = get_pla_name(plan_name)
+    v_plan_name = get_plan_name(plan_name)
     is_supp = (str(incl_supplemental_mmr).upper() == "Y" or str(incl_pseudo_claim).upper() == "Y")
     suffix = "curation_supp" if is_supp else "curation"
     return v_plan_name + suffix
