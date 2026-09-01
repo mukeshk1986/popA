@@ -178,7 +178,7 @@ def read_table(
     Raises:
         Exception: If the resulting DataFrame is empty or table doesn't exist.
     """
-    full_table_name = f"[{schema}].[{table_name}]"
+    full_table_name = f"{schema}.{table_name}"
     try:
         # Check if table exists (SQL-based, works on Serverless)
         try:
@@ -239,21 +239,21 @@ def write_table(
         None
 
     Raises:
-        Exception: If error writing data to table [schema].[table_name].
+        Exception: If error writing data to table {schema}.{table_name}.
     """
     try:
         # Create the schema if it doesn't exist
         spark.sql(f"CREATE SCHEMA IF NOT EXISTS {schema}")
 
         if partition_by:
-            df.write.format("delta").mode(mode).option("delta.enableChangeDataFeed", "true").partitionBy(partition_by).saveAsTable(f"[{schema}].[{table_name}]")
+            df.write.format("delta").mode(mode).option("delta.enableChangeDataFeed", "true").partitionBy(partition_by).saveAsTable(f"{schema}.{table_name}")
         else:
-            df.write.format("delta").mode(mode).saveAsTable(f"[{schema}].[{table_name}]")
+            df.write.format("delta").mode(mode).saveAsTable(f"{schema}.{table_name}")
 
-        logger.info(f"Data successfully written to table [{schema}].[{table_name}]")
+        logger.info(f"Data successfully written to table {schema}.{table_name}")
     except Exception as e:
-        logger.error(f"Error writing data to table [{schema}].[{table_name}]: {e}")
-        raise Exception(f"Failed to write data to table [{schema}].[{table_name}]: {e}") from e
+        logger.error(f"Error writing data to table {schema}.{table_name}: {e}")
+        raise Exception(f"Failed to write data to table {schema}.{table_name}: {e}") from e
 
 def update_table(spark, schema: str, table_name: str, condition: str, set_values: dict) -> None:
     """
@@ -375,7 +375,7 @@ def upsert_catalog(spark, catalog: str, schema: str, table_name: str, merge_cond
         None
     """
     try:
-        full_table_path = f"[{catalog}].[{schema}].[{table_name}]"
+        full_table_path = f"{catalog}.{schema}.{table_name}"
         delta_table = DeltaTable.forPath(spark, full_table_path)
 
         delta_table.alias("target").merge(
