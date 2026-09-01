@@ -172,7 +172,7 @@ else:
 
         # Parent / member-keyed tables
         spark.sql(f"""
-            DELETE FROM [{Catalog}].[schema_transformation].[CB] WHERE MEMBER_BID = {member_bid}
+            DELETE FROM {catalog}.schema_transformation.CB WHERE MEMBER_BID = {member_bid}
         """)
 
         logger.info(f"Done - deleted all records for PERSON_ID: {person_id}")

@@ -270,7 +270,7 @@ def update_table(spark, schema: str, table_name: str, condition: str, set_values
         None
     """
     try:
-        delta_table = DeltaTable.forPath(spark, f"[{schema}].[{table_name}]")
+        delta_table = DeltaTable.forPath(spark, f"{schema}.{table_name}")
         delta_table.update(condition=condition, set=set_values)
 
         logger.info(f"Data successfully updated in table [{schema}].[{table_name}]")
@@ -292,7 +292,7 @@ def delete_table(spark, schema: str, table_name: str, condition: str) -> None:
         None
     """
     try:
-        delta_table = DeltaTable.forPath(spark, f"[{schema}].[{table_name}]")
+        delta_table = DeltaTable.forPath(spark, f"{schema}.{table_name}")
         delta_table.delete(condition=condition)
 
         logger.info(f"Data successfully deleted from table [{schema}].[{table_name}]")
@@ -323,7 +323,7 @@ def merge_table(
         None
     """
     try:
-        full_table_path = f"[{schema}].[{table_name}]"
+        full_table_path = f"{schema}.{table_name}"
         delta_table = DeltaTable.forPath(spark, full_table_path)
 
         delta_table.alias("target").merge(
@@ -433,7 +433,7 @@ def create_or_upsert_data_table(
         partition_by (Optional[List[str]]): Optional list of columns to partition by
         merge_condition (Optional[str]): Merge condition string for upsert
     """
-    full_table_name = f"[{schema_name}].[{table_name}]"
+    full_table_name = f"{schema_name}.{table_name}"
     try:
         # Check if table exists (SQL-based, works on Serverless)
         table_exists = False
@@ -502,7 +502,7 @@ def upsert_delta_update_columns(spark, new_data_df, table_name: str, schema: str
     - Inserts all columns when not matched.
     """
     try:
-        full_table_path = f"[{schema}].[{table_name}]"
+        full_table_path = f"{schema}.{table_name}"
         delta_table = DeltaTable.forPath(spark, full_table_path)
 
         # Build update set: exclude created_by and created_date
@@ -664,7 +664,7 @@ def table_exists(spark, catalog: str, schema: str, table: str) -> bool:
     Returns:
         bool: True if exists, False otherwise
     """
-    full_table_name = f"[{catalog}].[{schema}].[{table}]"
+    full_table_name = f"{catalog}.{schema}.{table}"
     try:
         # Use SQL-based check (works on Serverless, spark.catalog not supported)
         spark.sql(f"DESCRIBE TABLE {full_table_name}")
@@ -686,7 +686,7 @@ def drop_table_if_exists(spark, catalog: str, schema: str, table: str) -> bool:
     Returns:
         bool: True if table was dropped, False if it didn't exist
     """
-    full_table_name = f"[{catalog}].[{schema}].[{table}]"
+    full_table_name = f"{catalog}.{schema}.{table}"
 
     if table_exists(spark, catalog, schema, table):
         spark.sql(f"DROP TABLE IF EXISTS {full_table_name}")
@@ -707,7 +707,7 @@ def truncate_table(spark, catalog: str, schema: str, table: str) -> bool:
     Returns:
         bool: True if table was truncated, False if it didn't exist
     """
-    full_table_name = f"[{catalog}].[{schema}].[{table}]"
+    full_table_name = f"{catalog}.{schema}.{table}"
 
     if table_exists(spark, catalog, schema, table):
         spark.sql(f"TRUNCATE TABLE {full_table_name}")
@@ -728,7 +728,7 @@ def get_table_row_count(spark, catalog: str, schema: str, table: str) -> int:
     Returns:
         int: Number of rows, or -1 if table doesn't exist
     """
-    full_table_name = f"[{catalog}].[{schema}].[{table}]"
+    full_table_name = f"{catalog}.{schema}.{table}"
 
     if not table_exists(spark, catalog, schema, table):
         logger.warning(f"Table {full_table_name} doesn't exist")
@@ -753,7 +753,7 @@ def create_table_from_view(spark, catalog: str, schema: str, table: str,
         partition_by: Optional list of columns to partition by
         enable_cdf: Enable Change Data Feed (default: True)
     """
-    full_table_name = f"[{catalog}].[{schema}].[{table}]"
+    full_table_name = f"{catalog}.{schema}.{table}"
 
     partition_clause = ""
     if partition_by:
