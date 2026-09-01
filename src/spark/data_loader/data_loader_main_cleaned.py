@@ -164,8 +164,9 @@ for table_name in non_supplemental_tables:
         expected_schema = build_expected_schema(expected_schema_config, table_name)
         logger.info(f"testing before csv---------------{table_name}: Archived {matched_file.name}")
         df_tbl = load_csv(spark, matched_file.path, expected_schema, header=False)
-        write_table(df_tbl, spark, target_schema, table_name, mode="overwrite")
-        processed_tables.add(table_name)
+        stage_table_name = f"stage_{table_name}"
+        write_table(df_tbl, spark, target_schema, stage_table_name, mode="overwrite")
+        processed_tables.add(stage_table_name)
     except Exception as load_err:
         logger.error(f"{table_name}: Failed to process file; {load_err}")
         file_failures.append((table_name, "Load error", str(load_err)))
@@ -216,8 +217,9 @@ for table_name in supplemental_tables:
                     & (month(col(date_col)) == int(supp_source_load_month))
                 )
 
-            write_table(df, spark, target_schema, sub_table_name, mode="overwrite")
-            processed_tables.add(sub_table_name)
+            stage_sub_table_name = f"stage_{sub_table_name}"
+            write_table(df, spark, target_schema, stage_sub_table_name, mode="overwrite")
+            processed_tables.add(stage_sub_table_name)
         except Exception as supp_err:
             logger.error(f"{sub_table_name}: Failed to process supplemental table; {supp_err}")
             file_failures.append((sub_table_name, "Supplemental load error", str(supp_err)))
