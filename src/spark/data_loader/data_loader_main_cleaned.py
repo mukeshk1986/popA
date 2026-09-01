@@ -173,7 +173,7 @@ for table_name in non_supplemental_tables:
 
     try:
         logger.info(f"testing---------------{table_name}: Archived {matched_file.name}")
-        dbutils.fs.mv(matched_file.path, f"{archive_dir}/{matched_file.name}")
+        dbutils.fs.mv(matched_file.path, f"{archive_dir}/{matched_file.name}", recurse=True)
         logger.info(f"{table_name}: Archived {matched_file.name}")
     except Exception as archive_err:
         logger.error(f"{table_name}: Loaded successfully but failed to archive file; {archive_err}")

@@ -29,7 +29,7 @@ tables:
         - StructField("PLAN_CD", StringType(), False)
         - StructField("CREATED_DTS", TimestampType(), False)
 
-  member:
+  stage_member:
     schema:
       StructType:
         - StructField("HCME_PLAN_ID_CD", StringType(), False)
@@ -64,7 +64,7 @@ tables:
         - StructField("MA_MIS_HINDILE", StringType(), True)
         - StructField("MEMB_CERT_PREM_RIP_PLUSSUB", StringType(), True)
 
-  member_enrollee_history:
+  stage_member_enrollee_history:
     schema:
       StructType:
         - StructField("HCME_PLAN_ID_CD", StringType(), False)
@@ -76,7 +76,7 @@ tables:
         - StructField("SUBGRP_CD", StringType(), False)
         - StructField("PRCO_TYPE_CD", StringType(), False)
 
-  member_enrollment:
+  stage_member_enrollment:
     schema:
       StructType:
         - StructField("ISSUER_ID", StringType(), False)
@@ -102,7 +102,7 @@ tables:
         - StructField("ENROLL_PERIOD_ACT", StringType(), False)
         - StructField("PREMS_PYBL_CD", StringType(), False)
 
-  facility_detail:
+  stage_facility_detail:
     schema:
       StructType:
         - StructField("CLIM_ID_CD", StringType(), False)
@@ -126,7 +126,7 @@ tables:
         - StructField("ABJDCT_DT", StringType(), False)
         - StructField("PRCO_POST_TYPE", StringType(), False)
 
-  facility_diag:
+  stage_facility_diag:
     schema:
       StructType:
         - StructField("CLIM_ID_CD", StringType(), False)
@@ -137,7 +137,7 @@ tables:
         - StructField("DIAG_CD", StringType(), False)
         - StructField("ICD_VER", StringType(), False)
 
-  facility_header:
+  stage_facility_header:
     schema:
       StructType:
         - StructField("ISSUER_ID", StringType(), False)
@@ -183,7 +183,7 @@ tables:
         - StructField("VOID_IND", StringType(), False)
         - StructField("DBO_CD", StringType(), False)
 
-  professional_diag:
+  stage_professional_diag:
     schema:
       StructType:
         - StructField("CLIM_ID_CD", StringType(), False)
@@ -194,7 +194,7 @@ tables:
         - StructField("DIAG_CD", StringType(), False)
         - StructField("ICD_VER", StringType(), False)
 
-  pharmacy:
+  stage_pharmacy:
     schema:
       StructType:
         - StructField("ISSUER_ID", StringType(), False)
@@ -233,7 +233,7 @@ tables:
         - StructField("SPCUT_DRUG_IND", StringType(), False)
         - StructField("MAIL_ORDER_IND", StringType(), False)
 
-  designated_provider:
+  stage_designated_provider:
     schema:
       StructType:
         - StructField("MEMB_ID_CD", StringType(), False)
@@ -244,7 +244,7 @@ tables:
         - StructField("SECL_ID", StringType(), False)
         - StructField("SECG_ID", StringType(), False)
 
-  health_events:
+  stage_health_events:
     schema:
       StructType:
         - StructField("HCME_PLAN_ID_CD", StringType(), False)
@@ -260,7 +260,7 @@ tables:
         - StructField("RECORD_SUB_ID", StringType(), False)
         - StructField("PERCENT_WEIGHT", StringType(), False)
 
-  lab:
+  stage_lab:
     schema:
       StructType:
         - StructField("HCME_PLAN_ID_CD", StringType(), False)
@@ -276,7 +276,7 @@ tables:
         - StructField("ORDERLNG_PROV_NM_FIRST", StringType(), True)
         - StructField("ORDERLNG_PROV_RIP", StringType(), True)
 
-  location:
+  stage_location:
     schema:
       StructType:
         - StructField("HCME_PLAN_ID_CD", StringType(), False)
@@ -304,7 +304,7 @@ tables:
         - StructField("SECO_ID_8", StringType(), False)
         - StructField("SECM_ID", StringType(), False)
 
-  provider:
+  stage_provider:
     schema:
       StructType:
         - StructField("HCME_PLAN_ID_CD", StringType(), True)
@@ -349,7 +349,7 @@ tables:
         - StructField("PROV_TAXONOMY_CD", StringType(), True)
         - StructField("MEDCD_PROV_ID", StringType(), True)
 
-  quality_events:
+  stage_quality_events:
     schema:
       StructType:
         - StructField("HCME_PLAN_ID_CD", StringType(), False)
@@ -361,7 +361,7 @@ tables:
         - StructField("CLIM_LN_NUMB", StringType(), False)
         - StructField("TRCBLT_FIELD_CD", StringType(), False)
 
-  mmr:
+  stage_mmr:
     schema:
       StructType:
         - StructField("MEDCR_CONTRACT_ID", StringType(), True)

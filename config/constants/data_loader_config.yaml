@@ -23,43 +23,43 @@ archive_dir: /Volumes/pop_{env}/{plan_name}ingestion/ingestion/archive
 # ================================
 # All the valid filenames to be processed
 file_names:
-  - facility_detail
-  - facility_diag
-  - facility_header
-  - member
-  - member_enrollee_history
-  - member_enrollment
-  - pharmacy
-  - professional
-  - professional_diag
-  - diagnosis_diag
-  - quality_events
-  - lab
-  - designated_provider
-  - provider
-  - location
-  - health_events
-  - mmr
-  - mao_004
+  - stage_facility_detail
+  - stage_facility_diag
+  - stage_facility_header
+  - stage_member
+  - stage_member_enrollee_history
+  - stage_member_enrollment
+  - stage_pharmacy
+  - stage_professional
+  - stage_professional_diag
+  - stage_diagnosis_diag
+  - stage_quality_events
+  - stage_lab
+  - stage_designated_provider
+  - stage_provider
+  - stage_location
+  - stage_health_events
+  - stage_mmr
+  - stage_mao_004
 
 # Supplemental file list
 supplemental_file_names:
-  - mao_004
-  - mmr
+  - stage_mao_004
+  - stage_mmr
 
 # ================================
 # Merge Keys Configuration
 # ================================
 # Merge keys for the non-supplemental tables in ra_transformation
 merge_keys:
-  facility_detail: "HCME_PLAN_ID_CD,HCME_ID_CD"
-  facility_diag: "HCME_PLAN_ID_CD,HCME_ID_CD,DIAG_TYPE_CD,DIAG_NUMB"
-  facility_header: "CLIM_ID_CD,HCME_PLAN_ID_CD"
-  member_enrollee_history: "HCME_PLAN_ID_CD,MEMB_ID_CD,BHI_MEMB_ID"
-  member: "HCME_PLAN_ID_CD"
-  professional: "CLIM_ID_CD,CLIM_LN_NUMB,HCME_PLAN_ID_CD"
-  professional_diag: "CLIM_ID_CD,HCME_PLAN_ID_CD,DIAG_TYPE_CD,DIAG_NUMB"
-  pharmacy: "CLIM_ID_CD,CLIM_LN_NUMB,HCME_PLAN_ID_CD"
+  stage_facility_detail: "HCME_PLAN_ID_CD,HCME_ID_CD"
+  stage_facility_diag: "HCME_PLAN_ID_CD,HCME_ID_CD,DIAG_TYPE_CD,DIAG_NUMB"
+  stage_facility_header: "CLIM_ID_CD,HCME_PLAN_ID_CD"
+  stage_member_enrollee_history: "HCME_PLAN_ID_CD,MEMB_ID_CD,BHI_MEMB_ID"
+  stage_member: "HCME_PLAN_ID_CD"
+  stage_professional: "CLIM_ID_CD,CLIM_LN_NUMB,HCME_PLAN_ID_CD"
+  stage_professional_diag: "CLIM_ID_CD,HCME_PLAN_ID_CD,DIAG_TYPE_CD,DIAG_NUMB"
+  stage_pharmacy: "CLIM_ID_CD,CLIM_LN_NUMB,HCME_PLAN_ID_CD"
 
 # ================================
 # Filename Matching Configuration
