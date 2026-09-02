@@ -153,7 +153,11 @@ def organize_files_by_table(dbutils, src_dir: str, target_dir: str, selected_tab
         logger.error(f"Failed to list source directory [{src_dir}]: {list_err}")
         return organized_files
 
-    for table_name in selected_tables:
+    # Sort tables by name length (longest first) to match more specific names before shorter ones
+    # This prevents "member" from matching files intended for "member_enrollment"
+    sorted_tables = sorted(selected_tables, key=lambda t: len(t), reverse=True)
+
+    for table_name in sorted_tables:
         token = table_name.upper()
         matching_files = [f for f in src_files if f.name.upper().split(".")[0].startswith(token)]
 
