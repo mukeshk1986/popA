@@ -10,7 +10,11 @@ target_schema: "{plan_name}transformation"
 # Base Directory Configuration
 # ================================
 # Base for all files lookups
-src_file_dir: /Volumes/pop_{env}/volumes/bhi-pop-{env}-datalake-{plan_name}inbox-us-east-1
+# with volume 
+# src_file_dir: /Volumes/pop_{env}/volumes/bhi-pop-{env}-datalake-{plan_name}inbox-us-east-1
+
+# without volume 
+src_file_dir: /Volumes/pop_{env}/ingestion/ingestion/src/
 
 # Base for all files lookups
 ingestion_file_dir: /Volumes/pop_{env}/{plan_name}ingestion/ingestion/src_files
