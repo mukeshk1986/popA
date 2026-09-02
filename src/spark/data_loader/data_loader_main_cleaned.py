@@ -148,39 +148,52 @@ def organize_files_by_table(dbutils, src_dir: str, target_dir: str, selected_tab
     organized_files = {}
 
     try:
+        logger.info(f"📂 Listing files in source directory: {src_dir}")
         src_files = dbutils.fs.ls(src_dir)
+        logger.info(f"✅ Found {len(src_files)} file(s)")
+        for f in src_files:
+            logger.info(f"   📄 {f.name}")
     except Exception as list_err:
-        logger.error(f"Failed to list source directory [{src_dir}]: {list_err}")
+        logger.error(f"❌ Failed to list source directory [{src_dir}]: {list_err}")
         return organized_files
 
     # Sort tables by name length (longest first) to match more specific names before shorter ones
     # This prevents "member" from matching files intended for "member_enrollment"
     sorted_tables = sorted(selected_tables, key=lambda t: len(t), reverse=True)
+    logger.info(f"📋 Processing tables (sorted by name length to avoid conflicts): {sorted_tables}")
 
-    for table_name in sorted_tables:
+    for idx, table_name in enumerate(sorted_tables, 1):
+        logger.info(f"\n🔍 [{idx}/{len(sorted_tables)}] Searching for files matching: {table_name}")
         token = table_name.upper()
         matching_files = [f for f in src_files if f.name.upper().split(".")[0].startswith(token)]
 
         if not matching_files:
-            logger.warning(f"No files found in [{src_dir}] for table [{table_name}]")
+            logger.warning(f"⚠️  No files found for table: {table_name}")
             continue
 
+        logger.info(f"✅ Found {len(matching_files)} file(s) for {table_name}:")
+        for f in matching_files:
+            logger.info(f"   📄 {f.name}")
+
         latest_file = max(matching_files, key=lambda f: f.modificationTime)
+        logger.info(f"📌 Using most recent file: {latest_file.name}")
+
         table_subdir = f"{target_dir}/{table_name}"
 
         try:
             dbutils.fs.mkdirs(table_subdir)
-            logger.info(f"Created subdirectory: {table_subdir}")
+            logger.info(f"✅ Created subdirectory: {table_subdir}")
         except Exception as mkdir_err:
-            logger.warning(f"Subdirectory may already exist for {table_name}: {mkdir_err}")
+            logger.warning(f"⚠️  Subdirectory may already exist: {mkdir_err}")
 
         try:
             target_path = f"{table_subdir}/{latest_file.name}"
+            logger.info(f"➡️  Moving file from {latest_file.path} to {target_path}")
             dbutils.fs.mv(latest_file.path, target_path, recurse=True)
             organized_files[table_name] = target_path
-            logger.info(f"Organized {table_name}: moved {latest_file.name} to {table_subdir}/")
+            logger.info(f"✅ Successfully organized {table_name}")
         except Exception as move_err:
-            logger.error(f"Failed to move file for {table_name}: {move_err}")
+            logger.error(f"❌ Failed to move file for {table_name}: {move_err}")
 
     return organized_files
 
@@ -196,43 +209,72 @@ def match_inbox_file(all_files, table_name: str):
 # COMMAND ----------
 
 # DBTITLE 1,Organize files from inbox into table-specific subdirectories
+logger.info("=" * 80)
+logger.info("MILESTONE 1: STARTING FILE ORGANIZATION")
+logger.info("=" * 80)
 logger.info(f"Step 1: Organizing files from source inbox to table-specific subdirectories")
 logger.info(f"Source inbox: {src_file_dir}")
 logger.info(f"Target organized directory: {ingestion_file_dir}")
+logger.info(f"Tables to process: {non_supplemental_tables}")
 
 organized_files = organize_files_by_table(dbutils, src_file_dir, ingestion_file_dir, non_supplemental_tables, logger)
 
+logger.info("=" * 80)
+logger.info("MILESTONE 2: FILE ORGANIZATION COMPLETE")
+logger.info("=" * 80)
 if not organized_files:
-    logger.warning("No files were organized. Proceeding with empty table list.")
+    logger.warning("❌ No files were organized. Proceeding with empty table list.")
     non_supplemental_tables = []
 else:
-    logger.info(f"Successfully organized {len(organized_files)} files for tables: {list(organized_files.keys())}")
+    logger.info(f"✅ Successfully organized {len(organized_files)} files")
+    for table_name, file_path in organized_files.items():
+        logger.info(f"   - {table_name}: {file_path}")
 
 # COMMAND ----------
 
 # DBTITLE 1,Load non-supplemental files from organized subdirectories
-for table_name in non_supplemental_tables:
+logger.info("=" * 80)
+logger.info("MILESTONE 3: STARTING DATA LOADING")
+logger.info("=" * 80)
+logger.info(f"Tables to load: {non_supplemental_tables}")
+logger.info(f"Target schema: {target_schema}")
+
+for idx, table_name in enumerate(non_supplemental_tables, 1):
+    logger.info("=" * 80)
+    logger.info(f"MILESTONE 3.{idx}: Processing {table_name}")
+    logger.info("=" * 80)
+
     if table_name not in organized_files:
-        logger.error(f"{table_name}: No file found after organization step")
+        logger.error(f"❌ {table_name}: No file found after organization step")
         file_failures.append((table_name, "File organization error", f"File not organized for table"))
         continue
 
     file_path = organized_files[table_name]
-    logger.info(f"Processing table: {table_name}; file: {file_path}")
+    logger.info(f"📁 File path: {file_path}")
 
     try:
+        logger.info(f"📖 Building schema for {table_name}...")
         expected_schema = build_expected_schema(expected_schema_config, table_name)
+        logger.info(f"✅ Schema built with {len(expected_schema.fields)} fields")
+
+        logger.info(f"📥 Loading CSV file with pipe delimiter (|) and no header...")
         df_tbl = load_csv(spark, file_path, expected_schema, delimiter="|", header=False)
+        row_count = df_tbl.count()
+        logger.info(f"✅ CSV loaded successfully: {row_count} rows")
+
         stage_table_name = f"stage_{table_name}"
+        logger.info(f"📝 Writing to table: {target_schema}.{stage_table_name}...")
         write_table(df_tbl, spark, target_schema, stage_table_name, mode="overwrite")
         processed_tables.add(stage_table_name)
-        logger.info(f"{table_name}: Successfully loaded to {target_schema}.{stage_table_name}")
+        logger.info(f"✅ {table_name}: Successfully loaded to {target_schema}.{stage_table_name}")
     except Exception as load_err:
-        logger.error(f"{table_name}: Failed to process file; {load_err}")
+        logger.error(f"❌ {table_name}: Failed to process file")
+        logger.error(f"   Error: {load_err}")
         file_failures.append((table_name, "Load error", str(load_err)))
         continue
 
     try:
+        logger.info(f"📦 Archiving file for {table_name}...")
         table_subdir = f"{ingestion_file_dir}/{table_name}"
         files_in_subdir = dbutils.fs.ls(table_subdir)
         for file_obj in files_in_subdir:
@@ -240,9 +282,9 @@ for table_name in non_supplemental_tables:
                 archive_file_path = f"{archive_dir}/{table_name}/{file_obj.name}"
                 dbutils.fs.mkdirs(f"{archive_dir}/{table_name}")
                 dbutils.fs.mv(file_obj.path, archive_file_path, recurse=True)
-                logger.info(f"{table_name}: Archived {file_obj.name}")
+                logger.info(f"✅ {table_name}: Archived {file_obj.name} to {archive_file_path}")
     except Exception as archive_err:
-        logger.error(f"{table_name}: Loaded successfully but failed to archive file; {archive_err}")
+        logger.error(f"⚠️  {table_name}: Loaded successfully but failed to archive file; {archive_err}")
 
 # COMMAND ----------
 
@@ -293,16 +335,25 @@ for table_name in supplemental_tables:
 # COMMAND ----------
 
 # DBTITLE 1,Load summary
-logger.info("Data Load Summary")
-logger.info(f"Successful tables loaded: {len(processed_tables)}")
-logger.info(f"Loaded tables: {sorted(processed_tables)}")
+logger.info("=" * 80)
+logger.info("MILESTONE 4: DATA LOAD COMPLETE - FINAL SUMMARY")
+logger.info("=" * 80)
 
 end_time = time.time()
 duration = end_time - start_time
-logger.info(f"Processing completed in {duration:.2f} seconds")
+
+logger.info(f"⏱️  Total Processing Time: {duration:.2f} seconds")
+logger.info(f"✅ Successful tables loaded: {len(processed_tables)}")
+if processed_tables:
+    for table in sorted(processed_tables):
+        logger.info(f"   ✓ {table}")
 
 if file_failures:
-    logger.error(f"Failed tables: {file_failures}")
+    logger.error(f"❌ Failed tables: {len(file_failures)}")
+    for table_name, error_type, error_msg in file_failures:
+        logger.error(f"   ✗ {table_name}: {error_type} - {error_msg}")
+    logger.error("=" * 80)
     raise Exception(f"Table processing failed for {len(file_failures)} table(s)")
 else:
-    logger.info("No table processing failures.")
+    logger.info("🎉 No table processing failures.")
+    logger.info("=" * 80)
