@@ -60,7 +60,7 @@ merge_keys:
   facility_diag: "HCME_PLAN_ID_CD,HCME_ID_CD,DIAG_TYPE_CD,DIAG_NUMB"
   facility_header: "CLIM_ID_CD,HCME_PLAN_ID_CD"
   member_enrollee_history: "HCME_PLAN_ID_CD,MEMB_ID_CD,BHI_MEMB_ID"
-  member: "HCME_PLAN_ID_CD"
+  member: "HOME_PLAN_ID_CD"
   professional: "CLIM_ID_CD,CLIM_LN_NUMB,HCME_PLAN_ID_CD"
   professional_diag: "CLIM_ID_CD,HCME_PLAN_ID_CD,DIAG_TYPE_CD,DIAG_NUMB"
   pharmacy: "CLIM_ID_CD,CLIM_LN_NUMB,HCME_PLAN_ID_CD"
