@@ -130,6 +130,57 @@ def build_expected_schema(schema_config: dict, table_name: str) -> StructType:
     return StructType(fields)
 
 
+def organize_files_by_table(dbutils, src_dir: str, target_dir: str, selected_tables: list, logger):
+    """
+    Organizes files from source directory (BHI inbox) into table-specific subdirectories.
+    Finds matching files for each table, creates subdirectories, and moves files there.
+
+    Args:
+        dbutils: Databricks utilities
+        src_dir: Source directory (BHI inbox)
+        target_dir: Target directory (src_files base)
+        selected_tables: List of table names to process
+        logger: Logger instance
+
+    Returns:
+        dict: Mapping of table_name to file path in organized directory
+    """
+    organized_files = {}
+
+    try:
+        src_files = dbutils.fs.ls(src_dir)
+    except Exception as list_err:
+        logger.error(f"Failed to list source directory [{src_dir}]: {list_err}")
+        return organized_files
+
+    for table_name in selected_tables:
+        token = table_name.upper()
+        matching_files = [f for f in src_files if f.name.upper().split(".")[0].startswith(token)]
+
+        if not matching_files:
+            logger.warning(f"No files found in [{src_dir}] for table [{table_name}]")
+            continue
+
+        latest_file = max(matching_files, key=lambda f: f.modificationTime)
+        table_subdir = f"{target_dir}/{table_name}"
+
+        try:
+            dbutils.fs.mkdirs(table_subdir)
+            logger.info(f"Created subdirectory: {table_subdir}")
+        except Exception as mkdir_err:
+            logger.warning(f"Subdirectory may already exist for {table_name}: {mkdir_err}")
+
+        try:
+            target_path = f"{table_subdir}/{latest_file.name}"
+            dbutils.fs.mv(latest_file.path, target_path, recurse=True)
+            organized_files[table_name] = target_path
+            logger.info(f"Organized {table_name}: moved {latest_file.name} to {table_subdir}/")
+        except Exception as move_err:
+            logger.error(f"Failed to move file for {table_name}: {move_err}")
+
+    return organized_files
+
+
 def match_inbox_file(all_files, table_name: str):
     """Finds the inbox file for a table name, matching on filename prefix (most recently modified wins)."""
     token = table_name.upper()
@@ -140,42 +191,52 @@ def match_inbox_file(all_files, table_name: str):
 
 # COMMAND ----------
 
-# DBTITLE 1,Load non-supplemental files from inbox
-try:
-    logger.info(f"testing---------------:  {src_file_dir}")
-    src_file_dir = ingestion_file_dir
-    inbox_files = dbutils.fs.ls(src_file_dir)
-except Exception as list_err:
-    logger.error(f"Failed to list inbox directory [{src_file_dir}]: {list_err}")
-    inbox_files = []
-    for table_name in non_supplemental_tables:
-        file_failures.append((table_name, "Directory listing error", str(list_err)))
-    non_supplemental_tables = []
+# DBTITLE 1,Organize files from inbox into table-specific subdirectories
+logger.info(f"Step 1: Organizing files from source inbox to table-specific subdirectories")
+logger.info(f"Source inbox: {src_file_dir}")
+logger.info(f"Target organized directory: {ingestion_file_dir}")
 
+organized_files = organize_files_by_table(dbutils, src_file_dir, ingestion_file_dir, non_supplemental_tables, logger)
+
+if not organized_files:
+    logger.warning("No files were organized. Proceeding with empty table list.")
+    non_supplemental_tables = []
+else:
+    logger.info(f"Successfully organized {len(organized_files)} files for tables: {list(organized_files.keys())}")
+
+# COMMAND ----------
+
+# DBTITLE 1,Load non-supplemental files from organized subdirectories
 for table_name in non_supplemental_tables:
-    matched_file = match_inbox_file(inbox_files, table_name)
-    if matched_file is None:
-        logger.error(f"{table_name}: No matching file found in {src_file_dir}")
-        file_failures.append((table_name, "Missing file", f"No matching file found in {src_file_dir}"))
+    if table_name not in organized_files:
+        logger.error(f"{table_name}: No file found after organization step")
+        file_failures.append((table_name, "File organization error", f"File not organized for table"))
         continue
 
-    logger.info(f"Processing table: {table_name}; file: {matched_file.path}")
+    file_path = organized_files[table_name]
+    logger.info(f"Processing table: {table_name}; file: {file_path}")
+
     try:
         expected_schema = build_expected_schema(expected_schema_config, table_name)
-        logger.info(f"testing before csv---------------{table_name}: Archived {matched_file.name}")
-        df_tbl = load_csv(spark, matched_file.path, expected_schema, header=False)
+        df_tbl = load_csv(spark, file_path, expected_schema, header=False)
         stage_table_name = f"stage_{table_name}"
         write_table(df_tbl, spark, target_schema, stage_table_name, mode="overwrite")
         processed_tables.add(stage_table_name)
+        logger.info(f"{table_name}: Successfully loaded to {target_schema}.{stage_table_name}")
     except Exception as load_err:
         logger.error(f"{table_name}: Failed to process file; {load_err}")
         file_failures.append((table_name, "Load error", str(load_err)))
         continue
 
     try:
-        logger.info(f"testing---------------{table_name}: Archived {matched_file.name}")
-        dbutils.fs.mv(matched_file.path, f"{archive_dir}/{matched_file.name}", recurse=True)
-        logger.info(f"{table_name}: Archived {matched_file.name}")
+        table_subdir = f"{ingestion_file_dir}/{table_name}"
+        files_in_subdir = dbutils.fs.ls(table_subdir)
+        for file_obj in files_in_subdir:
+            if file_obj.name == file_path.split("/")[-1]:
+                archive_file_path = f"{archive_dir}/{table_name}/{file_obj.name}"
+                dbutils.fs.mkdirs(f"{archive_dir}/{table_name}")
+                dbutils.fs.mv(file_obj.path, archive_file_path, recurse=True)
+                logger.info(f"{table_name}: Archived {file_obj.name}")
     except Exception as archive_err:
         logger.error(f"{table_name}: Loaded successfully but failed to archive file; {archive_err}")
 
