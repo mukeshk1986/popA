@@ -222,7 +222,7 @@ for table_name in non_supplemental_tables:
 
     try:
         expected_schema = build_expected_schema(expected_schema_config, table_name)
-        df_tbl = load_csv(spark, file_path, expected_schema, header=False)
+        df_tbl = load_csv(spark, file_path, expected_schema, delimiter="|", header=False)
         stage_table_name = f"stage_{table_name}"
         write_table(df_tbl, spark, target_schema, stage_table_name, mode="overwrite")
         processed_tables.add(stage_table_name)
