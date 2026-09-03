@@ -192,6 +192,10 @@ def organize_files_by_table(dbutils, src_dir: str, target_dir: str, selected_tab
             dbutils.fs.mv(latest_file.path, target_path, recurse=True)
             organized_files[table_name] = target_path
             logger.info(f"✅ Successfully organized {table_name}")
+
+            # Remove matched files from src_files to prevent shorter table names from matching them
+            src_files = [f for f in src_files if f.path != latest_file.path]
+            logger.info(f"📌 Removed matched file from pool to prevent conflicts with other tables")
         except Exception as move_err:
             logger.error(f"❌ Failed to move file for {table_name}: {move_err}")
 
