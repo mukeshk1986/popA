@@ -40,11 +40,12 @@ import time
 from pyspark.sql.types import (
     StructType, StructField, StringType, LongType, IntegerType, BooleanType, TimestampType
 )
-from pyspark.sql.functions import col, year, month
+from pyspark.sql.functions import col, year, month, concat, substring, lit
 
 from src.spark.helpers.config_util import get_config_yaml
 from src.spark.helpers.logger_util import get_logger
 from src.spark.helpers.databricks_util import get_plan_name, get_path_plan_name, load_csv, write_table
+from src.spark.helpers.dataloader_util import add_source_load_month_df
 from src.spark.helpers.generic_util import ingestion_folder_check
 
 logger = get_logger()
@@ -266,6 +267,10 @@ for idx, table_name in enumerate(non_supplemental_tables, 1):
         row_count = df_tbl.count()
         logger.info(f"✅ CSV loaded successfully: {row_count} rows")
 
+        logger.info(f"🔄 Extracting SOURCE_LOAD_MONTH from filename...")
+        df_tbl = add_source_load_month_df(spark, df_tbl)
+        logger.info(f"✅ SOURCE_LOAD_MONTH extracted from filename")
+
         stage_table_name = f"stage_{table_name}"
         logger.info(f"📝 Writing to table: {target_schema}.{stage_table_name}...")
         write_table(df_tbl, spark, target_schema, stage_table_name, mode="overwrite")
@@ -327,6 +332,24 @@ for table_name in supplemental_tables:
                     (year(col(date_col)) == int(supp_source_load_year))
                     & (month(col(date_col)) == int(supp_source_load_month))
                 )
+
+            logger.info(f"🔄 Adding SOURCE_LOAD_MONTH for supplemental table {sub_table_name}...")
+            # For mao_004, mmr, mor: use source_load_month from widgets (supp_source_load_year-supp_source_load_month)
+            # or derive from DATA_CYCLE_ID if present
+            if "DATA_CYCLE_ID" in df.columns:
+                # Transform DATA_CYCLE_ID from "202512" to "2025_12"
+                df = df.withColumn(
+                    "SOURCE_LOAD_MONTH",
+                    concat(
+                        substring(col("DATA_CYCLE_ID"), 1, 4),   # Year (first 4 chars)
+                        lit("_"),                                 # Underscore separator
+                        substring(col("DATA_CYCLE_ID"), 5, 2)    # Month (last 2 chars)
+                    )
+                )
+            elif source_load_month:
+                # Use parameter value if DATA_CYCLE_ID not available
+                df = df.withColumn("SOURCE_LOAD_MONTH", lit(source_load_month))
+            logger.info(f"✅ SOURCE_LOAD_MONTH added for {sub_table_name}")
 
             stage_sub_table_name = f"stage_{sub_table_name}"
             write_table(df, spark, target_schema, stage_sub_table_name, mode="overwrite")
