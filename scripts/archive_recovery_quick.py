@@ -2,7 +2,7 @@
 # Run this in a Databricks cell to move all archived files back to source inbox
 
 # Configuration
-ARCHIVE_BASE = "/Volumes/pop_dev/ingestion/ingestion/archive"
+ARCHIVE_BASE = "/Volumes/pop_dev/ingestion/ingestion/src_files/"
 SOURCE_INBOX = "/Volumes/pop_dev/ingestion/ingestion/src"
 
 # Get all table directories

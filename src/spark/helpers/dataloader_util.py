@@ -308,7 +308,8 @@ def add_source_load_month_df(spark, df: DataFrame) -> DataFrame:
     """
     try:
         # Step 1: Add file path column
-        df = df.withColumn("full_path", input_file_name())
+        # df = df.withColumn("full_path", input_file_name())
+        df = df.withColumn("full_path", col("_metadata.file_path"))
 
         # Step 2: Define regex patterns for date extraction
         standard_date_regex = r"(\d{8})(?=\.txt$)"   # Captures 8 digits before .txt
