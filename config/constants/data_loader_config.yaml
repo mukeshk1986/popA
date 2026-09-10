@@ -10,7 +10,11 @@ target_schema: "{plan_name}transformation"
 # Base Directory Configuration
 # ================================
 # Base for all files lookups
-src_file_dir: /Volumes/pop_{env}/volumes/bhi-pop-{env}-datalake-{plan_name}inbox-us-east-1
+# with volume 
+# src_file_dir: /Volumes/pop_{env}/volumes/bhi-pop-{env}-datalake-{plan_name}inbox-us-east-1
+
+# without volume 
+src_file_dir: /Volumes/pop_{env}/ingestion/ingestion/src/
 
 # Base for all files lookups
 ingestion_file_dir: /Volumes/pop_{env}/{plan_name}ingestion/ingestion/src_files
@@ -56,7 +60,7 @@ merge_keys:
   facility_diag: "HCME_PLAN_ID_CD,HCME_ID_CD,DIAG_TYPE_CD,DIAG_NUMB"
   facility_header: "CLIM_ID_CD,HCME_PLAN_ID_CD"
   member_enrollee_history: "HCME_PLAN_ID_CD,MEMB_ID_CD,BHI_MEMB_ID"
-  member: "HCME_PLAN_ID_CD"
+  member: "HOME_PLAN_ID_CD"
   professional: "CLIM_ID_CD,CLIM_LN_NUMB,HCME_PLAN_ID_CD"
   professional_diag: "CLIM_ID_CD,HCME_PLAN_ID_CD,DIAG_TYPE_CD,DIAG_NUMB"
   pharmacy: "CLIM_ID_CD,CLIM_LN_NUMB,HCME_PLAN_ID_CD"

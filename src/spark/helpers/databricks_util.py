@@ -28,42 +28,42 @@ def get_plan_name(plan_name: str) -> str:
 
 def get_curation_schema(plan_name: str, incl_supplemental_mmr: str, incl_pseudo_claim: str = "N") -> str:
     """Resolves the curation schema for a scoring run, segregating supplemental from non-supplemental output.
-    
+
     Non-supplemental runs write to (plan_name)_curation (unchanged behavior).
     Supplemental runs write to (plan_name)_curation_supp so the two run types are physically isolated.
     Supplemental has two feeds - MMR supplemental (incl_supplemental_mmr) and MAO pseudo-claims (incl_pseudo_claim) -
     and a run is treated as supplemental when EITHER flag is "Y".
     This is the single decision point for supplemental vs non-supplemental output routing.
     For non_anthem the prefix is empty, yielding "curation" or "curation_supp".
-    
+
     Args:
         plan_name (str): The plan name (e.g. "uatplan1", "non_anthem").
         incl_supplemental_mmr (str): MMR supplemental run flag, "Y" for supplemental.
         incl_pseudo_claim (str): MAO pseudo-claim run flag, "Y" for supplemental.
             Defaults to "N" so callers that do not segregate on pseudo-claims keep their existing behavior.
-    
+
     Returns:
         str: The resolved curation schema name.
     """
-    v_plan_name = get_pla_name(plan_name)
+    v_plan_name = get_plan_name(plan_name)
     is_supp = (str(incl_supplemental_mmr).upper() == "Y" or str(incl_pseudo_claim).upper() == "Y")
     suffix = "curation_supp" if is_supp else "curation"
     return v_plan_name + suffix
 
 def get_gap_curation_schema(plan_name: str, incl_supplemental_mmr: str) -> str:
     """Resolves the gap curation schema for a scoring/gap run, mirroring get_curation_schema for supplemental segregation.
-    
+
     Non-supplemental runs use (plan_name)_gap_curation (unchanged).
     Supplemental runs use (plan_name)_gap_curation_supp.
-    
+
     Args:
         plan_name (str): The plan name (e.g. "uatplan1", "non_anthem").
         incl_supplemental_mmr (str): Run type flag, "Y" for supplemental.
-    
+
     Returns:
         str: The resolved gap curation schema name.
     """
-    v_plan_name = get_pla_name(plan_name)
+    v_plan_name = get_plan_name(plan_name)
     suffix = "gap_curation_supp" if str(incl_supplemental_mmr).upper() == "Y" else "gap_curation"
     return v_plan_name + suffix
 
@@ -178,7 +178,7 @@ def read_table(
     Raises:
         Exception: If the resulting DataFrame is empty or table doesn't exist.
     """
-    full_table_name = f"[{schema}].[{table_name}]"
+    full_table_name = f"{schema}.{table_name}"
     try:
         # Check if table exists (SQL-based, works on Serverless)
         try:
@@ -239,21 +239,21 @@ def write_table(
         None
 
     Raises:
-        Exception: If error writing data to table [schema].[table_name].
+        Exception: If error writing data to table {schema}.{table_name}.
     """
     try:
         # Create the schema if it doesn't exist
         spark.sql(f"CREATE SCHEMA IF NOT EXISTS {schema}")
 
         if partition_by:
-            df.write.format("delta").mode(mode).option("delta.enableChangeDataFeed", "true").partitionBy(partition_by).saveAsTable(f"[{schema}].[{table_name}]")
+            df.write.format("delta").mode(mode).option("delta.enableChangeDataFeed", "true").partitionBy(partition_by).saveAsTable(f"{schema}.{table_name}")
         else:
-            df.write.format("delta").mode(mode).saveAsTable(f"[{schema}].[{table_name}]")
+            df.write.format("delta").mode(mode).saveAsTable(f"{schema}.{table_name}")
 
-        logger.info(f"Data successfully written to table [{schema}].[{table_name}]")
+        logger.info(f"Data successfully written to table {schema}.{table_name}")
     except Exception as e:
-        logger.error(f"Error writing data to table [{schema}].[{table_name}]: {e}")
-        raise Exception(f"Failed to write data to table [{schema}].[{table_name}]: {e}") from e
+        logger.error(f"Error writing data to table {schema}.{table_name}: {e}")
+        raise Exception(f"Failed to write data to table {schema}.{table_name}: {e}") from e
 
 def update_table(spark, schema: str, table_name: str, condition: str, set_values: dict) -> None:
     """
@@ -270,7 +270,7 @@ def update_table(spark, schema: str, table_name: str, condition: str, set_values
         None
     """
     try:
-        delta_table = DeltaTable.forPath(spark, f"[{schema}].[{table_name}]")
+        delta_table = DeltaTable.forPath(spark, f"{schema}.{table_name}")
         delta_table.update(condition=condition, set=set_values)
 
         logger.info(f"Data successfully updated in table [{schema}].[{table_name}]")
@@ -292,7 +292,7 @@ def delete_table(spark, schema: str, table_name: str, condition: str) -> None:
         None
     """
     try:
-        delta_table = DeltaTable.forPath(spark, f"[{schema}].[{table_name}]")
+        delta_table = DeltaTable.forPath(spark, f"{schema}.{table_name}")
         delta_table.delete(condition=condition)
 
         logger.info(f"Data successfully deleted from table [{schema}].[{table_name}]")
@@ -323,7 +323,7 @@ def merge_table(
         None
     """
     try:
-        full_table_path = f"[{schema}].[{table_name}]"
+        full_table_path = f"{schema}.{table_name}"
         delta_table = DeltaTable.forPath(spark, full_table_path)
 
         delta_table.alias("target").merge(
@@ -375,7 +375,7 @@ def upsert_catalog(spark, catalog: str, schema: str, table_name: str, merge_cond
         None
     """
     try:
-        full_table_path = f"[{catalog}].[{schema}].[{table_name}]"
+        full_table_path = f"{catalog}.{schema}.{table_name}"
         delta_table = DeltaTable.forPath(spark, full_table_path)
 
         delta_table.alias("target").merge(
@@ -433,7 +433,7 @@ def create_or_upsert_data_table(
         partition_by (Optional[List[str]]): Optional list of columns to partition by
         merge_condition (Optional[str]): Merge condition string for upsert
     """
-    full_table_name = f"[{schema_name}].[{table_name}]"
+    full_table_name = f"{schema_name}.{table_name}"
     try:
         # Check if table exists (SQL-based, works on Serverless)
         table_exists = False
@@ -502,7 +502,7 @@ def upsert_delta_update_columns(spark, new_data_df, table_name: str, schema: str
     - Inserts all columns when not matched.
     """
     try:
-        full_table_path = f"[{schema}].[{table_name}]"
+        full_table_path = f"{schema}.{table_name}"
         delta_table = DeltaTable.forPath(spark, full_table_path)
 
         # Build update set: exclude created_by and created_date
@@ -664,7 +664,7 @@ def table_exists(spark, catalog: str, schema: str, table: str) -> bool:
     Returns:
         bool: True if exists, False otherwise
     """
-    full_table_name = f"[{catalog}].[{schema}].[{table}]"
+    full_table_name = f"{catalog}.{schema}.{table}"
     try:
         # Use SQL-based check (works on Serverless, spark.catalog not supported)
         spark.sql(f"DESCRIBE TABLE {full_table_name}")
@@ -686,7 +686,7 @@ def drop_table_if_exists(spark, catalog: str, schema: str, table: str) -> bool:
     Returns:
         bool: True if table was dropped, False if it didn't exist
     """
-    full_table_name = f"[{catalog}].[{schema}].[{table}]"
+    full_table_name = f"{catalog}.{schema}.{table}"
 
     if table_exists(spark, catalog, schema, table):
         spark.sql(f"DROP TABLE IF EXISTS {full_table_name}")
@@ -707,7 +707,7 @@ def truncate_table(spark, catalog: str, schema: str, table: str) -> bool:
     Returns:
         bool: True if table was truncated, False if it didn't exist
     """
-    full_table_name = f"[{catalog}].[{schema}].[{table}]"
+    full_table_name = f"{catalog}.{schema}.{table}"
 
     if table_exists(spark, catalog, schema, table):
         spark.sql(f"TRUNCATE TABLE {full_table_name}")
@@ -728,7 +728,7 @@ def get_table_row_count(spark, catalog: str, schema: str, table: str) -> int:
     Returns:
         int: Number of rows, or -1 if table doesn't exist
     """
-    full_table_name = f"[{catalog}].[{schema}].[{table}]"
+    full_table_name = f"{catalog}.{schema}.{table}"
 
     if not table_exists(spark, catalog, schema, table):
         logger.warning(f"Table {full_table_name} doesn't exist")
@@ -753,7 +753,7 @@ def create_table_from_view(spark, catalog: str, schema: str, table: str,
         partition_by: Optional list of columns to partition by
         enable_cdf: Enable Change Data Feed (default: True)
     """
-    full_table_name = f"[{catalog}].[{schema}].[{table}]"
+    full_table_name = f"{catalog}.{schema}.{table}"
 
     partition_clause = ""
     if partition_by:
